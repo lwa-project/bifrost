@@ -621,7 +621,7 @@ PACKAGE_TARNAME='bifrost'
 PACKAGE_VERSION='0.10.0'
 PACKAGE_STRING='bifrost 0.10.0'
 PACKAGE_BUGREPORT=''
-PACKAGE_URL='https://github.com/ledatelescope/bifrost/'
+PACKAGE_URL='https://github.com/lwa-project/bifrost/'
 
 ac_unique_file="src/cuda.cpp"
 # Factoring default headers for most tests.
@@ -1645,7 +1645,7 @@ Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to the package provider.
-bifrost home page: <https://github.com/ledatelescope/bifrost/>.
+bifrost home page: <https://github.com/lwa-project/bifrost/>.
 _ACEOF
 ac_status=$?
 fi
@@ -17662,12 +17662,12 @@ then :
   as_fn_error $? "Required program ctags was not found" "$LINENO" 5
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether ${CTAGS} is exuberant" >&5
-printf %s "checking whether ${CTAGS} is sufficiently exuberant... " >&6; }
+printf %s "checking whether ${CTAGS} is exuberant... " >&6; }
 if ! ${CTAGS} --version | grep -q Exuberant
 then :
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
 printf "%s\n" "no" >&6; }
-       as_fn_error $? "exuberant/universal ctags is required, but ${CTAGS} is a different version" "$LINENO" 5
+       as_fn_error $? "exuberant ctags is required, but ${CTAGS} is a different version" "$LINENO" 5
 else $as_nop
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 printf "%s\n" "yes" >&6; }
@@ -26280,7 +26280,7 @@ Configuration commands:
 $config_commands
 
 Report bugs to the package provider.
-bifrost home page: <https://github.com/ledatelescope/bifrost/>."
+bifrost home page: <https://github.com/lwa-project/bifrost/>."
 
 _ACEOF
 ac_cs_config=`printf "%s\n" "$ac_configure_args" | sed "$ac_safe_unquote"`
