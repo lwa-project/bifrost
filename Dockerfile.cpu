@@ -37,9 +37,14 @@ RUN pip --no-cache-dir install \
         simplejson \
         pint \
         ctypesgen==1.0.2 \
-        graphviz
+        graphviz \
+        sphinx \
+        breathe
 
 ENV TERM xterm
+
+# Checkout the code
+RUN git clone https://github.com/lwa-project/bifrost
 
 # Build the library
 WORKDIR /bifrost

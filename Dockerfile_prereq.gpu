@@ -37,7 +37,9 @@ RUN pip --no-cache-dir install \
         simplejson \
         pint \
         ctypesgen==1.0.2 \
-        graphviz
+        graphviz \
+        sphinx \
+        breathe
 
 RUN pip --no-cache-dir install \
         cupy-cuda12x \
@@ -45,9 +47,6 @@ RUN pip --no-cache-dir install \
         numba
 
 ENV TERM xterm
-
-# Build the library
-WORKDIR /bifrost
 
 ENV LD_LIBRARY_PATH /usr/local/lib:${LD_LIBRARY_PATH}
 
