@@ -2,7 +2,7 @@
 # usage: [-h] --token-file PATH [--repo OWNER/REPO] [--output PATH]
 
 # Reads github user token from token-file path and appends one line of JSON to
-# output path.  Default repo is ledatelescope/bifrost.  Default output is
+# output path.  Default repo is lwa-project/bifrost.  Default output is
 # stdout.  Accumulated log file is JSON-lines format <https://jsonlines.org/>
 # and can be queried using `jq`.  Meant to be run daily.
 
@@ -60,8 +60,8 @@ parser.add_argument(
     "--repo",
     "-r",
     metavar="OWNER/REPO",
-    default="ledatelescope/bifrost",
-    help="Grab statistics from this repo [ledatelescope/bifrost]",
+    default="lwa-project/bifrost",
+    help="Grab statistics from this repo [lwa-project/bifrost]",
 )
 
 parser.add_argument(
