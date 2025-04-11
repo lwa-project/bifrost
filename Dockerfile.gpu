@@ -63,7 +63,7 @@ RUN ALL_GPU_ARCHS=$(nvcc -h | grep -Po "'compute_[0-9]{2,3}" | cut -d_ -f2 | sor
         GPU_ARCHS=$ALL_GPU_ARCHS; \
     fi && \
     echo "Building for GPU archs $GPU_ARCHS" && \
-    ./configure --with-gpu-archs="$GPU_ARCHS" --with-shared-mem=16384 && \
+    ./configure --with-gpu-archs="$GPU_ARCHS" --with-shared-mem=49152 && \
     make -j && \
     make doc && \
     make install
