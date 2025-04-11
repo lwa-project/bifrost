@@ -62,7 +62,7 @@ def pwrscrunch(data, factor=2, axis=0, func=np.sum):
         raise ValueError("Scrunch factor does not divide axis size")
     s = s[:axis] + (s[axis]//factor, factor) + s[axis:][1:]
     axis = axis + 1 if axis >= 0 else axis
-    return func(np.abs(data.reshape(s))**2, axis=axis)
+    return func((np.abs(data.reshape(s))**2).astype(data.dtype), axis=axis)
 
 @unittest.skipUnless(BF_CUDA_ENABLED, "requires GPU support")
 class ReduceTest(unittest.TestCase):
@@ -137,7 +137,7 @@ class ReduceTest(unittest.TestCase):
         b = bf.empty_like(b_gold, space='cuda')
         bf.reduce(a, b, op)
         b = b.copy('system')
-        np.testing.assert_allclose(b, b_gold, rtol=1e-3 if op[:3] == 'pwr' else 1e-7)
+        np.testing.assert_allclose(b, b_gold, rtol=5e-7)
     def run_complex_reduce_slice_test(self, shape, axis, n, op='sum', dtype=np.float32):
         if n is None:
             return None
@@ -165,7 +165,7 @@ class ReduceTest(unittest.TestCase):
         b = bf.empty_like(b_gold, space='cuda')
         bf.reduce(a_slice, b, op)
         b = b.copy('system')
-        np.testing.assert_allclose(b, b_gold, rtol=1e-3 if op[:3] == 'pwr' else 1e-7)
+        np.testing.assert_allclose(b, b_gold, rtol=5e-7)
     def test_complex_reduce(self):
         self.run_complex_reduce_test((3,6,5), axis=1, n=2, op='pwrsum', dtype=np.complex64)
         for shape in [(20,20,40), (20,40,60), (40,100,200)]:
