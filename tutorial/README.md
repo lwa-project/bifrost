@@ -1,9 +1,9 @@
 # The Bifrost Tutorial
 
-A collection of examples that show how to use various features in the [Bifrost framework](https://github.com/ledatelescope/bifrost/).  Before beginning this tutorial it would be a good idea to familiarize yourself with the framework and its concepts:
+A collection of examples that show how to use various features in the [Bifrost framework](https://github.com/lwa-project/bifrost/).  Before beginning this tutorial it would be a good idea to familiarize yourself with the framework and its concepts:
 
  * Bifrost is described in [Cranmer et al.](https://arxiv.org/abs/1708.00720)
- * Documentation for the Python APIs can be found [here](http://ledatelescope.github.io/bifrost/)
+ * Documentation for the Python APIs can be found [here](http://lwa-project.github.io/bifrost/)
  * There is an [overview talk of Bifrost](https://www.youtube.com/watch?v=DXH89rOVVzg) from the 2019 CASPER workshop.
  * There is a [walk through of this tutorial](https://youtu.be/ktk2dkUssAA?t=20170) from the 2021 CASPER workshop.
 
@@ -15,7 +15,7 @@ This is the simplest way to try the tutorial, without needing to install or conf
 
 Visit each `.ipynb` file in this directory on GitHub, where you can read the text, code, and see static output.  To allow interaction, use the “Open in Colab” button at the top.  Then use control-enter to run each selected code block; the first one should install Bifrost on your runtime instance. (It can take a short while, but a green arrow should march through the steps. If you switch away, just remember to return before the instance times out!)
 
-Please [report any issues](https://github.com/ledatelescope/bifrost/issues) with opening, installing, or running the tutorial notebooks on Colab.
+Please [report any issues](https://github.com/lwa-project/bifrost/issues) with opening, installing, or running the tutorial notebooks on Colab.
 
 ## Docker Image
 

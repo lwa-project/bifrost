@@ -12,9 +12,9 @@ ARG VCS_REF
 LABEL org.label-schema.build-date=$BUILD_DATE \
       org.label-schema.name="Bifrost - Jupyter image" \
       org.label-schema.description="Image with CUDA, Bifrost, LSL, and a useful Jupyter stack" \
-      org.label-schema.url="https://github.com/ledatelescope/bifrost" \
+      org.label-schema.url="https://github.com/lwa-project/bifrost" \
       org.label-schema.vcs-ref=$VCS_REF \
-      org.label-schema.vcs-url="https://github.com/ledatelescope/bifrost_tutorial" \
+      org.label-schema.vcs-url="https://github.com/lwa-project/bifrost_tutorial" \
       org.label-schema.schema-version="1.0"
 
 USER root
@@ -130,7 +130,7 @@ RUN pip install \
         simplejson \
         ctypesgen==1.0.2
 ## Bifrost
-RUN git clone https://github.com/ledatelescope/bifrost.git && \
+RUN git clone https://github.com/lwa-project/bifrost.git && \
     cd /home/$LSL_USER/bifrost
 RUN cd /home/$LSL_USER/bifrost && \
     ./configure --with-gpu-archs="35 50 61 75" && \
