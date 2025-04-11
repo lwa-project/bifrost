@@ -62,7 +62,7 @@ def pwrscrunch(data, factor=2, axis=0, func=np.sum):
         raise ValueError("Scrunch factor does not divide axis size")
     s = s[:axis] + (s[axis]//factor, factor) + s[axis:][1:]
     axis = axis + 1 if axis >= 0 else axis
-    return func(np.abs(data.reshape(s))**2 axis=axis)
+    return func(np.abs(data.reshape(s))**2, axis=axis)
 
 @unittest.skipUnless(BF_CUDA_ENABLED, "requires GPU support")
 class ReduceTest(unittest.TestCase):
