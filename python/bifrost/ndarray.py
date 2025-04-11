@@ -39,6 +39,10 @@ TODO: Some calls result in segfault with space=cuda (e.g., __getitem__
 import sys
 import ctypes
 import numpy as np
+try:
+    from numpy.exceptions import ComplexWarning as NPComplexWarning
+except ImportError:
+    from numpy import ComplexWarning as NPComplexWarning
 from bifrost.memory import raw_malloc, raw_free, raw_get_space, space_accessible
 from bifrost.libbifrost import _bf, _th, _check, _array, _space2string
 from bifrost import device
@@ -384,7 +388,7 @@ class ndarray(np.ndarray):
             else:
                 if self.bf.dtype.is_complex:
                     ## complex in -> real out (plus the standard "drop imag part" warning)
-                    np.ComplexWarning()
+                    NPComplexWarning()
                     func_string = b'a = b.real'
                 else:
                     ## real in -> real out
