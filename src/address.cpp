@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -61,6 +60,24 @@ BFstatus bfAddressGetPort(BFaddress addr, int* port) {
 	          BF_STATUS_INVALID_ARGUMENT);
 	BF_TRY_RETURN_ELSE(*port = ntohs(((sockaddr_in*)addr)->sin_port),
 	                   *port = 0);
+}
+BFstatus bfAddressIsMulticast(BFaddress addr, int* multicast) {
+    BF_ASSERT(addr, BF_STATUS_INVALID_HANDLE);
+    BF_ASSERT(multicast,  BF_STATUS_INVALID_POINTER);
+    
+    unsigned family;
+    bfAddressGetFamily(addr, &family);
+    
+    if( family == AF_INET ) {
+        sockaddr_in *sa4 = reinterpret_cast<sockaddr_in*>(addr);
+        if( ((sa4->sin_addr.s_addr & 0xFF) >= 224) \
+            && ((sa4->sin_addr.s_addr & 0xFF) < 240) ) {
+            *multicast = 1;
+        }
+    } else {
+        *multicast = 0;
+    }
+    return BF_STATUS_SUCCESS;
 }
 BFstatus bfAddressGetMTU(BFaddress addr, int* mtu) {
 	BF_ASSERT(addr, BF_STATUS_INVALID_HANDLE);

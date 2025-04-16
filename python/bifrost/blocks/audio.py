@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,10 +25,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import absolute_import
-
 from bifrost.pipeline import SourceBlock
 import bifrost.portaudio as audio
+
+from bifrost import telemetry
+telemetry.track_module()
 
 class AudioSourceBlock(SourceBlock):
     def create_reader(self, kwargs):
@@ -43,7 +43,7 @@ class AudioSourceBlock(SourceBlock):
                 'dtype':  'i' + str(reader.nbits),
                 'shape':  [-1, reader.channels],
                 'labels': ['time', 'pol'],
-                'scales': [1./reader.rate, None],
+                'scales': [1. / reader.rate, None],
                 'units':  ['s', None]
             },
             'frame_rate':   reader.rate,

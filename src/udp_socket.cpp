@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,7 +37,7 @@ struct BFudpsocket_impl : public Socket {
 
 BFstatus bfUdpSocketCreate(BFudpsocket* obj) {
 	BF_ASSERT(obj, BF_STATUS_INVALID_POINTER);
-	BF_TRY_RETURN_ELSE(*obj = (BFudpsocket)new BFudpsocket_impl(),//BFudpsocket_impl::SOCK_DGRAM),
+	BF_TRY_RETURN_ELSE(*obj = (BFudpsocket)new BFudpsocket_impl(),//SOCK_DGRAM),
 	                   *obj = 0);
 }
 BFstatus bfUdpSocketDestroy(BFudpsocket obj) {
@@ -55,6 +54,11 @@ BFstatus bfUdpSocketBind(   BFudpsocket obj, BFaddress local_addr) {
 	BF_ASSERT(obj,        BF_STATUS_INVALID_HANDLE);
 	BF_ASSERT(local_addr, BF_STATUS_INVALID_ARGUMENT);
 	BF_TRY_RETURN(obj->bind(*(sockaddr_storage*)local_addr));
+}
+BFstatus bfUdpSocketSniff(  BFudpsocket obj, BFaddress local_addr) {
+	BF_ASSERT(obj,        BF_STATUS_INVALID_HANDLE);
+	BF_ASSERT(local_addr, BF_STATUS_INVALID_ARGUMENT);
+	BF_TRY_RETURN(obj->sniff(*(sockaddr_storage*)local_addr));
 }
 BFstatus bfUdpSocketShutdown(BFudpsocket obj) {
 	BF_ASSERT(obj,        BF_STATUS_INVALID_HANDLE);
@@ -74,7 +78,7 @@ BFstatus bfUdpSocketGetTimeout(BFudpsocket obj, double* secs) {
 	try {
 		*secs = obj->get_timeout();
 	}
-	catch( Socket::Error ) {
+	catch( Socket::Error& ) {
 		*secs = 0;
 		return BF_STATUS_INVALID_STATE;
 	}
@@ -86,6 +90,27 @@ BFstatus bfUdpSocketGetTimeout(BFudpsocket obj, double* secs) {
 	//BF_TRY(*secs = obj->get_timeout(),
 	//       *secs = 0);
 }
+BFstatus bfUdpSocketSetPromiscuous(BFudpsocket obj, int state) {
+    BF_ASSERT(obj, BF_STATUS_INVALID_HANDLE);
+    BF_TRY_RETURN(obj->set_promiscuous(state));
+}
+BFstatus bfUdpSocketGetPromiscuous(BFudpsocket obj, int* promisc) {
+	BF_ASSERT(obj, BF_STATUS_INVALID_HANDLE);
+	BF_ASSERT(promisc, BF_STATUS_INVALID_POINTER);
+	// WAR for old Socket implem returning Socket::Error not BFexception
+	try {
+		*promisc = obj->get_promiscuous();
+	}
+	catch( Socket::Error& ) {
+		*promisc = 0;
+		return BF_STATUS_INVALID_STATE;
+	}
+	catch(...) {
+		*promisc = 0;
+		return BF_STATUS_INTERNAL_ERROR;
+	}
+	return BF_STATUS_SUCCESS;
+}
 BFstatus bfUdpSocketGetMTU(BFudpsocket obj, int* mtu) {
 	BF_ASSERT(obj, BF_STATUS_INVALID_HANDLE);
 	BF_ASSERT(mtu, BF_STATUS_INVALID_POINTER);
@@ -93,7 +118,7 @@ BFstatus bfUdpSocketGetMTU(BFudpsocket obj, int* mtu) {
 	try {
 		*mtu = obj->get_mtu();
 	}
-	catch( Socket::Error ) {
+	catch( Socket::Error& ) {
 		*mtu = 0;
 		return BF_STATUS_INVALID_STATE;
 	}

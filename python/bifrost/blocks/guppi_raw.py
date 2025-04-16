@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,12 +25,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import absolute_import
-
 from bifrost.pipeline import SourceBlock
 import bifrost.guppi_raw as guppi_raw
 
-import numpy as np
+from bifrost import telemetry
+telemetry.track_module()
 
 def _get_with_default(obj, key, default=None):
     return obj[key] if key in obj else default
@@ -52,12 +50,12 @@ class GuppiRawSourceBlock(SourceBlock):
         header_size = reader.tell() - previous_pos
         self.header_buf = bytearray(header_size)
         nbit      = ihdr['NBITS']
-        assert(nbit in set([4,8,16,32,64]))
+        assert(nbit in set([4, 8, 16, 32, 64]))
         nchan     = ihdr['OBSNCHAN']
         bw_MHz    = ihdr['OBSBW']
         cfreq_MHz = ihdr['OBSFREQ']
         df_MHz = bw_MHz / nchan
-        f0_MHz = cfreq_MHz - 0.5*(nchan-1)*df_MHz
+        f0_MHz = cfreq_MHz - 0.5 * (nchan - 1) * df_MHz
         # Note: This will be negative if OBSBW is negative, which is correct
         dt_s   = 1. / df_MHz / 1e6
         # Derive the timestamp of this block
@@ -73,16 +71,17 @@ class GuppiRawSourceBlock(SourceBlock):
                 'shape':  [-1, nchan, ihdr['NTIME'], ihdr['NPOL']],
                 # Note: 'time' (aka block) is the frame axis
                 'labels': ['time', 'freq', 'fine_time', 'pol'],
-                'scales': [(tstart_unix, abs(dt_s)*ihdr['NTIME']),
+                'scales': [(tstart_unix, abs(dt_s) * ihdr['NTIME']),
                            (f0_MHz, df_MHz),
                            (0, dt_s),
                            None],
-                'units':  ['s', 'MHz', 's', None]
+                'units':  ['s', 'MHz', 's', None],
+                'gulp_nframe': 1,
             },
-            'az_start':      _get_with_default(ihdr, 'AZ'),            # Decimal degrees
-            'za_start':      _get_with_default(ihdr, 'ZA'),            # Decimal degrees
-            'raj':           _get_with_default(ihdr, 'RA')*(24./360.), # Decimal hours
-            'dej':           _get_with_default(ihdr, 'DEC'),           # Decimal degrees
+            'az_start':      _get_with_default(ihdr, 'AZ'),                # Decimal degrees
+            'za_start':      _get_with_default(ihdr, 'ZA'),                # Decimal degrees
+            'raj':           _get_with_default(ihdr, 'RA') * (24. / 360.), # Decimal hours
+            'dej':           _get_with_default(ihdr, 'DEC'),               # Decimal degrees
             'source_name':   _get_with_default(ihdr, 'SRC_NAME'),
             'refdm':         _get_with_default(ihdr, 'CHAN_DM'),
             'refdm_units':   'pc cm^-3',

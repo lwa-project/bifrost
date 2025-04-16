@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,16 +25,23 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from libbifrost import _bf, _check, _get, _string2space
-from ndarray import asarray
+from bifrost.libbifrost import _bf, _check
+from bifrost.ndarray import asarray
+from bifrost.ndarray import ndarray
 
 import ctypes
 
-def transpose(dst, src, axes=None):
-	if axes is None:
-		axes = reversed(range(len(dst.shape)))
-	dst_bf = asarray(dst).as_BFarray()
-	src_bf = asarray(src).as_BFarray()
-	array_type = ctypes.c_int*src.ndim
-	axes_array = array_type(*axes)
-	_check(_bf.Transpose(src_bf, dst_bf, axes_array))
+from typing import List, Optional, Tuple, Union
+
+from bifrost import telemetry
+telemetry.track_module()
+
+def transpose(dst: ndarray, src: ndarray, axes: Optional[Union[List[int],Tuple[int]]]=None) -> ndarray:
+    if axes is None:
+        axes = reversed(range(len(dst.shape)))
+    dst_bf = asarray(dst).as_BFarray()
+    src_bf = asarray(src).as_BFarray()
+    array_type = ctypes.c_int * src.ndim
+    axes_array = array_type(*axes)
+    _check(_bf.bfTranspose(src_bf, dst_bf, axes_array))
+    return dst

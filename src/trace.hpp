@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,16 +28,22 @@
 
 #pragma once
 
+#include <bifrost/config.h>
 #include "cuda.hpp"
 
 #if BF_CUDA_ENABLED
+#if __has_include(<nvtx3/nvToolsExt.h> )
+#include <nvtx3/nvToolsExt.h>
+#else
 #include <nvToolsExt.h>
+#endif
 #endif
 
 #include <map>
 #include <queue>
 #include <string>
 #include <cstring>
+#include <cstdint>
 
 #if BF_TRACE_ENABLED
 // Note: __PRETTY_FUNCTION__ is GCC-specific

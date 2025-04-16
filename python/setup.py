@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 # Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,37 +26,51 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from setuptools import setup, find_packages
+from setuptools import setup, Extension, find_packages
+import os
+import sys
+import glob
 
 # Parse version file to extract __version__ value
-bifrost_version_file = 'bifrost/version.py'
+bifrost_version_file = 'bifrost/version/__init__.py'
 try:
-	with open(bifrost_version_file, 'r') as version_file:
-		for line in version_file:
-			line = line.strip()
-			if len(line) == 0 or line[0] == '#':
-				continue
-			if '__version__' in line:
-				__version__ = line.split('=', 1)[1].strip()
-				__version__ = ''.join([c for c in __version__
-				                       if c.isalnum() or c in ".-_"])
+    with open(bifrost_version_file, 'r') as version_file:
+        for line in version_file:
+            line = line.strip()
+            if len(line) == 0 or line[0] == '#':
+                continue
+            if '__version__' in line:
+                __version__ = line.split('=', 1)[1].strip()
+                __version__ = ''.join([c for c in __version__
+                                       if c.isalnum() or c in ".-_"])
 except IOError:
-	print "*************************************************************************"
-	print "Please run `make` from the root of the source tree to generate version.py"
-	print "*************************************************************************"
-	raise
+    if 'clean' in sys.argv[1:]:
+        sys.exit(0)
+    print("*************************************************************************")
+    print("Please run `configure` and `make` from the root of the source tree to")
+    print("generate", bifrost_version_file)
+    print("*************************************************************************")
+    raise
 
-setup(name='Bifrost',
+# Build up a list of scripts to install
+scripts = glob.glob(os.path.join('..', 'tools', '*.py'))
+
+setup(name='bifrost',
       version=__version__,
       description='Pipeline processing framework',
       author='Ben Barsdell',
       author_email='benbarsdell@gmail.com',
-      url='https://github.com/ledatelescope/bifrost',
+      url='https://github.com/lwa-project/bifrost',
       packages=find_packages(),
+      scripts=scripts,
+      python_requires='>=3.6',
       install_requires=[
           "numpy>=1.8.1",
           "contextlib2>=0.4.0",
           "pint>=0.7.0",
           "graphviz>=0.5.0",
+          "ctypesgen==1.0.2",
           "matplotlib"
-      ])
+      ],
+      ext_package='bifrost',
+      ext_modules = [])

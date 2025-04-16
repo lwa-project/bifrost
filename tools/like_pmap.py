@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2017-2024, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2017-2024, The University of New Mexico. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# * Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+# * Neither the name of The Bifrost Authors nor the names of its
+#   contributors may be used to endorse or promote products derived
+#   from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import os
+import re
+import argparse
+import subprocess
+
+os.environ['VMA_TRACELEVEL'] = '0'
+from bifrost.proclog import load_by_pid
+
+from bifrost import telemetry
+telemetry.track_script()
+
+
+def get_best_size(value):
+    """
+    Give a size in bytes, convert it into a nice, human-readable value 
+    with units.
+    """
+    
+    if value >= 1024.0**4:
+        value = value / 1024.0**4
+        unit = 'TB'
+    elif value >= 1024.0**3:
+        value = value / 1024.0**3
+        unit = 'GB'
+    elif value >= 1024.0**2:
+        value = value / 1024.0**2
+        unit = 'MB'
+    elif value >= 1024.0:
+        value = value / 1024.0
+        unit = 'kB'
+    else:
+        unit = 'B'
+    return value, unit
+
+
+def main(args):
+    # Find out the kernel page size, both regular and huge
+    ## Regular
+    pageSize = subprocess.check_output(['getconf', 'PAGESIZE'])
+    pageSize = int(pageSize, 10)
+    ## Huge - assumed that the value is in kB
+    hugeSize = subprocess.check_output(['grep', 'Hugepagesize', '/proc/meminfo'])
+    hugeSize = int(hugeSize.split()[1], 10) * 1024
+    
+    # Load in the bifrost ring information for this process
+    contents = load_by_pid(args.pid, include_rings=True)
+    rings = {}
+    for block in contents.keys():
+        if block == 'rings':
+            for ring in contents[block].keys():
+                rings[ring] = {}
+                for key in contents[block][ring]:
+                    rings[ring][key] = contents[block][ring][key]
+                continue
+    if not rings:
+        raise RuntimeError("Cannot find bifrost ring info for PID: %i" % args.pid)
+        
+    # Load in the NUMA map page for this process
+    try:
+        with open(f"/proc/{pid}/numa_maps", 'r') as fh:
+            numaInfo = fh.read()
+    except IOError:
+        raise RuntimeError("Cannot find NUMA memory info for PID: %i" % args.pid)
+        
+    # Parse out the anonymous entries in this file
+    _numaRE = re.compile('(?P<addr>[0-9a-f]+).*[(anon)|(mapped)]=(?P<size>[0-9]+).*(swapcache=(?P<swap>[0-9]+))?.*N(?P<binding>[0-9]+)=(?P<size2>[0-9]+)')
+    areas = {}
+    files = {}
+    for line in numaInfo.split('\n'):
+        ## Skp over blank lines, files, and anything that is not anonymous
+        if len(line) < 3:
+            continue
+        elif line.find('file=') != -1:
+            ## Run  regex over the line to get the address, size, and binding information
+            mtch = _numaRE.search(line)
+            if mtch is not None:
+                ### Basic info
+                heap  = True if line.find('heap') != -1 else False
+                stack = True if line.find('stack') != -1 else False
+                huge  = True if line.find('huge') != -1 else False
+                share = True if line.find('mapmax=') != -1 else False
+                
+                ### Detailed info
+                addr  = mtch.group('addr')
+                size  = int(mtch.group('size'), 10)
+                size *= hugeSize if huge else pageSize
+                try:
+                    ssize = int(mtch.group('swap'), 10)
+                    swap = True
+                except TypeError:
+                    ssize = 0
+                    swap = False
+                ssize *=  hugeSize if huge else pageSize
+                node = int(mtch.group('binding'), 10)
+                
+                ### Save
+                files[addr] = {'size':size, 'node':node, 'huge':huge, 'heap':heap, 'stack':stack, 'shared':share, 'swapped':swap, 'swapsize':ssize}
+                
+        elif line.find('anon=') != -1:
+            ## Run  regex over the line to get the address, size, and binding information
+            mtch = _numaRE.search(line)
+            if mtch is not None:
+                ### Basic info
+                heap  = True if line.find('heap') != -1 else False
+                stack = True if line.find('stack') != -1 else False
+                huge  = True if line.find('huge') != -1 else False
+                share = True if line.find('mapmax=') != -1 else False
+                
+                ### Detailed info
+                addr  = mtch.group('addr')
+                size  = int(mtch.group('size'), 10)
+                size *= hugeSize if huge else pageSize
+                try:
+                    ssize = int(mtch.group('swap'), 10)
+                    swap = True
+                except TypeError:
+                    ssize = 0
+                    swap = False
+                ssize *=  hugeSize if huge else pageSize
+                node = int(mtch.group('binding'), 10)
+                
+                ### Save
+                areas[addr] = {'size':size, 'node':node, 'huge':huge, 'heap':heap, 'stack':stack, 'shared':share, 'swapped':swap, 'swapsize':ssize}
+            
+    # Try to match the rings to the memory areas
+    matched = []
+    for ring in rings:
+        stride = rings[ring]['stride']
+        
+        best   = None
+        metric = 1e13
+        for addr in areas:
+            diff = abs(areas[addr]['size'] - stride)
+            if diff < metric:
+                best = addr
+                metric = diff
+        rings[ring]['addr'] = best
+        matched.append( best )
+        
+    # Take a look at how the areas are bound
+    nodeCountsAreas = {}
+    nodeSizesAreas = {}
+    for addr in areas:
+        node = areas[addr]['node']
+        size = areas[addr]['size']
+        try:
+            nodeCountsAreas[node] += 1
+            nodeSizesAreas[node] += size
+        except KeyError:
+            nodeCountsAreas[node] = 1
+            nodeSizesAreas[node] = size
+    nodeCountsFiles = {}
+    nodeSizesFiles = {}
+    for addr in files:
+        node = files[addr]['node']
+        size = files[addr]['size']
+        try:
+            nodeCountsFiles[node] += 1
+            nodeSizesFiles[node] += size
+        except KeyError:
+            nodeCountsFiles[node] = 1
+            nodeSizesFiles[node] = size
+            
+    # Final report
+    print("Rings: %i" % len(rings))
+    print("File Backed Memory Areas:")
+    print("  Total: %i" % len(files))
+    print("  Heap: %i" % len([addr for addr in files if files[addr]['heap']]))
+    print("  Stack: %i" % len([addr for addr in files if files[addr]['stack']]))
+    print("  Shared: %i" % len([addr for addr in files if files[addr]['shared']]))
+    print("  Swapped: %i" % len([addr for addr in files if files[addr]['swapped']]))
+    for node in sorted(nodeCountsFiles.keys()):
+        print("  NUMA Node %i:" % node)
+        print("    Count: %i" % nodeCountsFiles[node])
+        print("    Size: %.3f %s" % get_best_size(nodeSizesFiles[node]))
+    print("Anonymous Memory Areas:")
+    print("  Total: %i" % len(areas))
+    print("  Heap: %i" % len([addr for addr in areas if areas[addr]['heap']]))
+    print("  Stack: %i" % len([addr for addr in areas if areas[addr]['stack']]))
+    print("  Shared: %i" % len([addr for addr in areas if areas[addr]['shared']]))
+    print("  Swapped: %i" % len([addr for addr in areas if areas[addr]['swapped']]))
+    for node in sorted(nodeCountsAreas.keys()):
+        print("  NUMA Node %i:" % node)
+        print("    Count: %i" % nodeCountsAreas[node])
+        print("    Size: %.3f %s" % get_best_size(nodeSizesAreas[node]))
+    print(" ")
+    
+    print("Ring Mappings:")
+    for ring in sorted(rings):
+        print("  %s" % ring)
+        try:
+            area = areas[rings[ring]['addr']]
+        except KeyError:
+            print("    Unknown")
+            continue
+        sv, su = get_best_size(area['size'])
+        diff = abs(area['size'] - rings[ring]['stride'])
+        status = ''
+        if diff > 0.5*hugeSize:
+            status = '???'
+        dv, du = get_best_size(diff)
+        sf = float(area['swapsize'])/float(area['size'])
+        
+        print("    Size: %.3f %s" % get_best_size(rings[ring]['stride']))
+        print("    Area: %s %s" % (rings[ring]['addr'], status))
+        print("      Size: %.3f %s%s" % (sv, su, ' (within %.3f %s)' % (dv, du) if diff != 0 else ''))
+        print("      Node: %i" % area['node'])
+        print("      Attributes:")
+        print("        Huge? %s" % area['huge'])
+        print("        Heap? %s" % area['heap'])
+        print("        Stack? %s" % area['stack'])
+        print("        Shared? %s" % area['shared'])
+        print("      Swap Status:")
+        print("        Swapped? %s" % area['swapped'])
+        if area['swapped']:
+            print("        Swap Fraction: %.1f%%" % (100.0*sf,))
+    print(" ")
+    
+    print("Other Non-Ring Areas:")
+    print("  Size: %.3f %s" % get_best_size(sum([areas[area]['size'] for area in areas if area not in matched])))
+    print(" ")
+    
+    print("File Backed Areas:")
+    print("  Size: %.3f %s" % get_best_size(sum([files[area]['size'] for area in files])))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Get a detailed look at memory usage in a Bifrost pipeline',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument('pid', type=int,
+                        help='process ID')
+    args = parser.parse_args()
+    main(args)

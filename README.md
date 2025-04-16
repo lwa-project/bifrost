@@ -1,120 +1,149 @@
-# Bifrost 
+# Bifrost
 
-| **`GPU+CPU`** | **`CPU-only`** | 
-|-----------------|----------------------|
-| [![Jenkins](https://img.shields.io/travis/rust-lang/rust.svg)]() | [![Travis](https://travis-ci.org/ledatelescope/bifrost.svg?branch=master)](https://travis-ci.org/ledatelescope/bifrost) |
+| **`CPU/GPU Build`** | **`Coverage`** | 
+|-----------------|----------------|
+|[![GHA](https://github.com/lwa-project/bifrost/actions/workflows/main.yml/badge.svg)](https://github.com/lwa-project/bifrost/actions/workflows/main.yml) | [![Codecov Status](https://codecov.io/gh/lwa-project/bifrost/graph/badge.svg?token=ShP5svhXk0)](https://codecov.io/gh/lwa-project/bifrost) |
 
 A stream processing framework for high-throughput applications.
 
-### [Bifrost Documentation](http://ledatelescope.github.io/bifrost/)
+### [![Paper](https://img.shields.io/badge/arXiv-1708.00720-blue.svg)](https://arxiv.org/abs/1708.00720)
+
+### [Bifrost Documentation](https://bifrost-htc.readthedocs.org)
+
+See also the [Bifrost tutorial notebooks](tutorial/), which can be run
+on Google Colab or any Jupyter environment where Bifrost is installed
+(and a GPU is available).
+
 ### [Bifrost Roadmap](ROADMAP.md)
 
-## Your first pipeline
+## A Simple Pipeline
 
-Example pipelines can be found in the `testbench/` directory. For example, here's a snippet  
-that reads data from a binary file, copies it to the GPU, runs an FFT, then writes the
-output back to disk:
-
-```python
-
-# Get a list of binary data files
-filenames   = glob.glob('testdata/*.bin')
-
-# Setup pipeline
-b_read      = BinaryFileReadBlock(filenames, window_len, 1, 'cf32', core=0)
-b_copy      = CopyBlock(b_read, space='cuda', core=1, gpu=0)
-b_fft       = FftBlock(b_copy, axes=1, core=2, gpu=0)
-b_out       = CopyBlock(b_fft, space='system', core=3)
-b_write     = BinaryFileWriteBlock(b_out, core=4)
-
-# Run pipeline
-pipeline = bfp.get_default_pipeline()
-print pipeline.dot_graph()
-pipeline.run()
-```
-
-And here's an example that reads a WAV audio file, generates a spectrum, and writes the output to a filterbank file:
+Here's a snippet that reads Sigproc filterbank files, applies a
+Fast Dispersion Measure Transform (FDMT) on the GPU, and writes
+the results to a set of dedispersed time series files:
 
 ```python
 import bifrost as bf
+import sys
 
-data = bf.blocks.read_wav(['file1.wav', 'file2.wav'], gulp_nframe=4096)
-data = bf.blocks.copy(data, space='cuda')
-data = bf.views.split_axis(data, 'time', 256, label='fine_time')
-data = bf.blocks.fft(data, axes='fine_time', axis_labels='freq')
-data = bf.blocks.detect(data, mode='jones')
-data = bf.blocks.accumulate(data, 2)
-data = bf.blocks.transpose(data, ['time', 'pol', 'freq'])
-data = bf.blocks.copy(data, space='cuda_host')
-data = bf.blocks.quantize(data, 'i8')
+filenames = sys.argv[1:]
+
+print "Building pipeline"
+data = bf.blocks.read_sigproc(filenames, gulp_nframe=128)
+data = bf.blocks.copy(data, 'cuda')
+data = bf.blocks.transpose(data, ['pol', 'freq', 'time'])
+data = bf.blocks.fdmt(data, max_dm=100.)
+data = bf.blocks.copy(data, 'cuda_host')
 bf.blocks.write_sigproc(data)
 
-pipeline = bf.get_default_pipeline()
-pipeline.shutdown_on_signals()
-pipeline.run()
+print "Running pipeline"
+bf.get_default_pipeline().run()
+print "All done"
 ```
 
-<!---
-Should put an image of this pipeline here.
--->
-## Feature overview
+## A More Complex Pipeline
 
- * Designed for sustained high-throughput stream processing
- * Python and C++ APIs wrap fast C++/CUDA backend
- * Native support for both system (CPU) and CUDA (GPU) memory spaces and computation
+Below is a longer snippet that demonstrates some additional features
+of Bifrost pipelines, including the BlockChainer tool, block scopes,
+CPU and GPU binding, data views, and dot graph output. This example
+generates high-resolution spectra from Guppi Raw data:
 
- * Main modules
-  - Ring buffer: Flexible and thread safe, supports CPU and GPU memory spaces
-  - Transpose: Arbitrary transpose function for ND arrays
+```python
+import bifrost as bf
+import sys
 
- * Experimental modules
-  - UDP: Fast data capture with memory reordering and unpacking
-  - Radio astronomy: High-performance signal processing operations
+filenames = sys.argv[1:]
+f_avg = 4
+n_int = 8
+
+print "Building pipeline"
+bc = bf.BlockChainer()
+bc.blocks.read_guppi_raw(filenames, core=0)
+bc.blocks.copy(space='cuda', core=1)
+with bf.block_scope(fuse=True, gpu=0):
+    bc.blocks.transpose(['time', 'pol', 'freq', 'fine_time'])
+    bc.blocks.fft(axes='fine_time', axis_labels='fine_freq', apply_fftshift=True)
+    bc.blocks.detect('stokes')
+    bc.views.merge_axes('freq', 'fine_freq')
+    bc.blocks.reduce('freq', f_avg)
+    bc.blocks.accumulate(n_int)
+bc.blocks.copy(space='cuda_host', core=2)
+bc.blocks.write_sigproc(core=3)
+
+pipeline = bf.get_default_pipeline()
+print pipeline.dot_graph()
+print "Running pipeline"
+pipeline.shutdown_on_signals()
+pipeline.run()
+print "All done"
+```
+
+## Feature Overview
+
+ - Designed for sustained high-throughput stream processing
+ - Python API wraps fast C++/CUDA backend
+ - Fast and flexible ring buffer specifically designed for processing continuous data streams
+ - Native support for both system (CPU) and CUDA (GPU) memory spaces and computation
+ - Fast kernels for transposition, dedispersion, correlation, beamforming and more
+ - bfMap: JIT-compiled ND array transformations
+ - Fast UDP data capture
+ - A growing library of ready-to-use pipeline 'blocks'
+ - Rich metadata enables seamless interoperability between blocks
 
 ## Installation
 
-### C library
+**For a quick demo which you can run in-browser without installation,
+go to the following [link](https://colab.research.google.com/github/lwa-project/bifrost/blob/master/BifrostDemo.ipynb).**
 
-Install dependencies:
+### CUDA
 
-    $ sudo apt-get install exuberant-ctags
+CUDA is available at https://developer.nvidia.com/cuda-downloads. You can check the
+["Getting Started guide"](https://bifrost-htc.readthedocs.io/en/latest/Getting-started-guide.html) 
+in the docs to see which versions of the CUDA toolkit have been confirmed to work with Bifrost. 
 
-### Python interface
+### C Dependencies
 
-Install dependencies:
+If using Ubuntu or another Debian-based linux distribution:
+    
+    $ sudo apt-get install universal-ctags
 
- * [PyCLibrary fork](https://github.com/MatthieuDartiailh/pyclibrary)
- * Numpy
- * matplotlib
+If using Redhat or another Redhat-based linux distribution:
+
+    $ sudo dnf install ctags
+
+Otherwise check https://ctags.sourceforge.net/ for install instructions.
+
+### Python Dependencies
+
+ * numpy
  * contextlib2
  * pint
- 
+ * ctypesgen
 
 ```
-$ sudo pip install numpy matplotlib contextlib2 pint git+https://github.com/MatthieuDartiailh/pyclibrary.git@dff70337fd904a43de2bdd05dc548620160354d0
+$ sudo pip install numpy contextlib2 pint ctypesgen==1.0.2
 ```
 
-### Bifrost installation
+### Bifrost Installation
 
-Edit **user.mk** to suit your system, then run:
+To configure Bifrost for you your system and build the library, then run:
 
+    $ ./configure
     $ make -j
-    $ sudo make install 
+    $ sudo make install
 
-which will install the library and headers into /usr/local/lib and
-/usr/local/include respectively.
+By default this will install the library and headers into /usr/local/lib and
+/usr/local/include respectively.  You can use the --prefix option to configure
+to change this.
 
 You can call the following for a local Python installation:
 
-    $ sudo make install PYINSTALLFLAGS="--prefix=$HOME/usr/local"
+    $ ./configure --with-pyinstall-flags=--user
+    $ make -j
+    $ sudo make install HAVE_PYTHON=0
+    $ make -C python install
 
-Note that the bifrost module's use of PyCLibrary means it must have
-access to both the bifrost shared library and the bifrost headers at
-import time. The LD_LIBRARY_PATH and BIFROST_INCLUDE_PATH environment
-variables can be used to add search paths for these dependencies
-respectively.
-
-### Docker container
+### Docker Container
 
 Install dependencies:
 
@@ -134,11 +163,17 @@ For CPU-only builds:
     $ make docker-cpu
     $ docker run --rm -it ledatelescope/bifrost
 
+### Running Tests
+
+To run all CPU and GPU tests:
+
+    $ make test
+
 ## Documentation
 
-### [Online Bifrost Documentation](http://ledatelescope.github.io/bifrost/)
+### [Online Bifrost Documentation](https://bifrost-htc.readthedocs.org)
 
-### Building the docs with Docker
+### Building the Docs with Docker
 
 To quickly build the docs using Docker, ensure that you have
 built a Bifrost container as `ledatelescope/bifrost`.
@@ -148,20 +183,64 @@ run it, and have it complete the docs-building process for you,
 outputting the entire html documentation inside `docs/html` on
 your machine.
 
-### Building the docs from scratch
+### Building the Docs from Scratch
 
-Install sphinx and breathe using pip, and also install Doxygen.
+Install breathe using pip:
 
+    $ sudo pip install breathe sphinx
+
+Also install Doxygen using your package manager. 
+In Ubuntu, for example:
+
+    $ sudo apt-get install doxygen
+
+Otherwise check https://www.doxygen.nl/ for Doxygen install instructions.
+    
 Doxygen documentation can be generated by running:
 
     $ make doc
 
 This documentation can then be used in a Sphinx build
-by running 
+by running
 
     $ make html
 
 inside the /docs directory.
+
+## Telemetry
+
+By default Bifrost installs with basic Python telemetry enabled in
+order to help inform how the software is used and to help inform future 
+development.  The data collected as part of this consist seven things:
+ * a timestamp for when the report is generated,
+ * a unique installation identifier,
+ * the Bifrost version being used, 
+ * the execution time of the Python process that imports Bifrost,
+ * which Bifrost modules are imported,
+ * which Bifrost functions are used and their average execution times, and
+ * which Bifrost scripts are used.
+These data are sent to the Bifrost developers using a HTTP POST request where
+they are aggregated.
+
+Users can opt out of telemetry collection using:
+
+```
+python -m bifrost.telemetry --disable
+```
+
+This command will set a disk-based flag that disables the reporting process.
+
+## Acknowledgement
+
+If you make use of Bifrost as part of your data collection or analysis please
+include the following acknowledgement in your publications:
+
+> This research has made use of Bifrost (Cranmer et al. 2017).  Continued
+> development of Bifrost is supported by NSF award OAC/2103707.
+
+and cite:
+
+> \bibitem[Cranmer et al.(2017)]{2017JAI.....650007C} Cranmer, M.~D., Barsdell, B.~R., Price, D.~C., et al.\ 2017, Journal of Astronomical Instrumentation, 6, 1750007. doi:10.1142/S2251171717500076
 
 ## Contributors
 

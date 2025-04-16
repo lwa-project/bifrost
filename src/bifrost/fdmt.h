@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +31,8 @@
  *         Transform (FDMT) of Zackay and Ofek (2014),
  *         https://arxiv.org/abs/1411.5373
  */
+
+// ***TODO: Replace BFsize with long/size_t/int as appropriate
 
 #ifndef BF_FDMT_H_INCLUDE_GUARD_
 #define BF_FDMT_H_INCLUDE_GUARD_
@@ -91,8 +92,8 @@ BFstatus bfFdmtSetStream(BFfdmt      plan,
 /*! \p bfFdmtExecute executes a FDMT plan.
  *
  *  \param plan              The FDMT plan to execute
- *  \param in                The input filterbank of shape [..., ntime, \p nchan]
- *  \param out               The output dispersion bank of shape [..., ntime, \p max_delay]
+ *  \param iarray            The input filterbank of shape [..., ntime, \p nchan]
+ *  \param oarray            The output dispersion bank of shape [..., ntime, \p max_delay]
  *  \param negative_delays   If \p true, the function computes delays in the range (-max_delay, 0] instead of [0, max_delay)
  *  \param exec_storage      Pointer to memory storage for temporary execution data
  *  \param exec_storage_size Pointer to the size in bytes of the memory at \p exec_storage
@@ -117,8 +118,8 @@ BFstatus bfFdmtSetStream(BFfdmt      plan,
  *        samples of the computed output array will be incomplete.
  */
 BFstatus bfFdmtExecute(BFfdmt         plan,
-                       BFarray const* in,
-                       BFarray const* out,
+                       BFarray const* iarray,
+                       BFarray const* oarray,
                        BFbool         negative_delays,
                        void*          exec_storage,
                        BFsize*        exec_storage_size);

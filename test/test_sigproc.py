@@ -1,5 +1,4 @@
 # Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -136,12 +135,14 @@ class Test_data_manip(unittest.TestCase):
         initial_nframe = testfile.get_nframe()
         random_stream = np.random.randint(63, size=10000).astype('uint8').T
         testfile.append_data(random_stream)
-        self.assertEqual(testfile.data.shape[0],initial_nframe+10000)
+        self.assertEqual(testfile.data.shape[0], initial_nframe + 10000)
+        testfile.close()
     def test_data_slice(self):
         testFile = SigprocFile()
         testFile.open(filename='./data/1chan8bitNoDM.fil', mode='r+b')
         testFile.read_header()
         self.assertEqual(testFile.read_data(-1).shape, (1, 1, 1))
+        testFile.close()
     def test_append_untransposed_data(self):
         """test if appending data in different shape affects output"""
         initial_nframe = self.my8bitfile.get_nframe()
@@ -162,6 +163,8 @@ class Test_data_manip(unittest.TestCase):
         testfile1.open(filename='./data/test_write1.fil', mode='rb')
         testfile2.open(filename='./data/test_write1.fil', mode='rb')
         np.testing.assert_array_equal(testfile1.read_data(), testfile2.read_data())
+        testfile1.close()
+        testfile2.close()
 class Test_16bit_2chan(unittest.TestCase):
     def setUp(self):
         self.my16bitfile = SigprocFile()
@@ -175,7 +178,7 @@ class Test_16bit_2chan(unittest.TestCase):
         self.assertEqual(self.my16bitfile.read_data().shape[-1], 2)
     def test_append_2chan_data(self):
         initial_nframe = self.my16bitfile.get_nframe()
-        random_stream = np.random.randint(2**16-1, size=(10000,2)).astype('uint16')
+        random_stream = np.random.randint(2**16 - 1, size=(10000, 2)).astype('uint16')
         file1 = SigprocFile()
         file1.header = self.my16bitfile.header
         file1.interpret_header()
@@ -188,6 +191,8 @@ class Test_16bit_2chan(unittest.TestCase):
         file2.read_header()
         file2.read_data()
         np.testing.assert_array_equal(file1.read_data(),file2.read_data())
+        file1.close()
+        file2.close()
 class Test_data_slicing(unittest.TestCase):
     def setUp(self):
         self.myfile = SigprocFile()
@@ -198,8 +203,7 @@ class Test_data_slicing(unittest.TestCase):
     def test_only_negative_end_given(self):
         data = self.myfile.read_data(end=-3)
         self.assertEqual(data.shape[1:],(1,1))
-        self.assertTrue(data.shape[0] > 100) #assumes more than 100 frames in .fil
+        self.assertTrue(data.shape[0] > 100) # assumes more than 100 frames in .fil
     def test_different_signs(self):
         data = self.myfile.read_data(3,-3)
-        self.assertEqual(data.shape,(12800-6, 1, 1)) #assumes more than ~100 frames in .fil
-
+        self.assertEqual(data.shape, (12800 - 6, 1, 1)) # assumes more than ~100 frames in .fil

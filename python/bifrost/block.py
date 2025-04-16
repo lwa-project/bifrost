@@ -1,5 +1,5 @@
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+
+# Copyright (c) 2016-2024, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,19 +30,23 @@
 Right now the only possible block type is one
 of a simple transform which works on a span by span basis.
 """
+
 import json
 import threading
 import time
-from contextlib import nested
-import matplotlib
-## Use a graphical backend which supports threading
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
+try:
+    from contextlib import ExitStack
+except ImportError:
+    from contextlib2 import ExitStack
 import numpy as np
-import bifrost
 from bifrost import affinity
 from bifrost.ring import Ring
 from bifrost.sigproc import SigprocFile, unpack
+from bifrost.libbifrost import EndOfDataStop
+from bifrost.ndarray import copy_array
+
+from bifrost import telemetry
+telemetry.track_module()
 
 class Pipeline(object):
     """Class which connects blocks linearly, with
@@ -86,7 +90,8 @@ class Pipeline(object):
         for block in self.blocks:
             if issubclass(type(block[0]), MultiTransformBlock):
                 for param_name in block[1]:
-                    block[0].rings[param_name] = self.rings[str(block[1][param_name])]
+                    block[0].rings[param_name] = \
+                        self.rings[str(block[1][param_name])]
                 threads.append(threading.Thread(
                     target=block[0]._main))
             else:
@@ -126,7 +131,7 @@ def insert_zeros_evenly(input_data, number_zeros):
     insert_index = np.floor(
         np.arange(
             number_zeros,
-            step=1.0)*float(input_data.size)/number_zeros)
+            step=1.0) * float(input_data.size) / number_zeros).astype(int)
     output_data = np.insert(
         input_data, insert_index,
         np.zeros(number_zeros))
@@ -160,11 +165,12 @@ class TransformBlock(object):
         output_ring.resize(self.out_gulp_size)
         with output_ring.begin_writing() as oring:
             with oring.begin_sequence(
-                sequence_name, sequence_time_tag,
-                header=self.output_header,
-                nringlet=sequence_nringlet) as oseq:
+                    sequence_name, sequence_time_tag,
+                    header=self.output_header,
+                    nringlet=sequence_nringlet) as oseq:
                 with oseq.reserve(self.out_gulp_size) as span:
-                    #TODO: Need to continuously spawn extra spans as in SourceBlock
+                    # TODO: Need to continuously spawn extra spans
+                    #         as in SourceBlock.
                     yield span
     def ring_transfer(self, input_ring, output_ring):
         """Iterate through two rings span-by-span"""
@@ -176,11 +182,12 @@ class TransformBlock(object):
             output_ring.resize(self.out_gulp_size)
             with output_ring.begin_writing() as oring:
                 with oring.begin_sequence(
-                    sequence.name, sequence.time_tag,
-                    header=self.output_header,
-                    nringlet=sequence.nringlet) as oseq:
+                        sequence.name, sequence.time_tag,
+                        header=self.output_header,
+                        nringlet=sequence.nringlet) as oseq:
                     for ispan in sequence.read(self.gulp_size):
-                        with oseq.reserve(ispan.size*self.out_gulp_size/self.gulp_size) as ospan:
+                        with oseq.reserve(ispan.size * self.out_gulp_size //
+                                          self.gulp_size) as ospan:
                             yield ispan, ospan
 
 class SourceBlock(object):
@@ -201,9 +208,9 @@ class SourceBlock(object):
         output_ring.resize(self.gulp_size)
         with output_ring.begin_writing() as oring:
             with oring.begin_sequence(
-                sequence_name, sequence_time_tag,
-                header=self.output_header,
-                nringlet=1) as oseq:
+                    sequence_name, sequence_time_tag,
+                    header=self.output_header,
+                    nringlet=1) as oseq:
                 while True:
                     with oseq.reserve(self.gulp_size) as span:
                         yield span
@@ -216,7 +223,7 @@ class SinkBlock(object):
         self.core = -1
     def load_settings(self, input_header):
         """Load in settings from input ring header"""
-        self.header = json.loads(input_header.tostring())
+        self.header = json.loads(input_header.tobytes())
     def iterate_ring_read(self, input_ring):
         """Iterate through one input ring
         @param[in] input_ring Ring to read through"""
@@ -230,7 +237,7 @@ class MultiTransformBlock(object):
     def __init__(self):
         """
         Set up dictionaries for holding ring settings
-        
+
         self.rings Dictionary which holds the ring objects. Keys
             are the ring_names defined in class.
         self.header Dictionary which holds dictionary headers
@@ -272,19 +279,22 @@ class MultiTransformBlock(object):
         into a single list generator"""
         iterators = [iter(iterable) for iterable in iterables]
         while True:
-            next_set = [iterator.next() for iterator in iterators]
-            yield self.flatten(*next_set)
+            try:
+                next_set = [next(iterator) for iterator in iterators]
+                yield self.flatten(*next_set)
+            except (EndOfDataStop, StopIteration):
+                return
     def load_settings(self):
         """Set by user to interpret input rings"""
         pass
     def read(self, *args):
         """Iterate over selection of input rings"""
         # list of sequences
-        for sequences in self.izip(*[self.rings[ring_name].read(guarantee=True) \
-                for ring_name in args]):
+        for sequences in self.izip(*[self.rings[ring_name].read(guarantee=True)
+                                     for ring_name in args]):
             # sequences is a tuple of all sequences
             for ring_name, sequence in self.izip(args, sequences):
-                self.header[ring_name] = json.loads(sequence.header.tostring())
+                self.header[ring_name] = json.loads(sequence.header.tobytes())
             self.load_settings()
             # resize all rings
             for ring_name in args:
@@ -297,28 +307,26 @@ class MultiTransformBlock(object):
                     numpy_dtype_word = self.header[ring_name]['dtype'].split()[1]
                     dtype = np.dtype(numpy_dtype_word.split(".")[1].split("'")[0]).type
                 dtypes[ring_name] = dtype
-            for spans in self.izip(*[sequence.read(self.gulp_size[ring_name]) \
-                    for ring_name, sequence in self.izip(args, sequences)]):
+            for spans in self.izip(*[sequence.read(self.gulp_size[ring_name])
+                                     for ring_name, sequence in self.izip(args, sequences)]):
                 yield tuple([span.data_view(dtypes[ring_name])[0] for span, ring_name in self.izip(spans, args)])
     def write(self, *args):
         """Iterate over selection of output rings"""
         # list of sequences
-        #TODO: Change this code if someone gives a reasonable answer on 
-        #http://stackoverflow.com/questions/38834827/multiple-with-statements-in-python-2-7-using-a-list-comprehension
-        with nested(*[self.rings[ring_name].begin_writing() \
-                for ring_name in args]) as out_rings:
-
+        with ExitStack() as ring_stack:
+            out_rings = [ring_stack.enter_context(self.rings[ring_name].begin_writing()) for ring_name in args]
+            
             while True:
                 # resize all rings
                 for ring_name in args:
                     self.rings[ring_name].resize(self.gulp_size[ring_name])
 
-                with nested(*[out_ring.begin_sequence(
-                    str(int(time.time()*1000)),
-                    int(time.time()*1000),
-                    header=json.dumps(self.header[ring_name]),
-                    nringlet=1) \
-                        for out_ring, ring_name in self.izip(out_rings, args)]) as out_sequences:
+                with ExitStack() as seq_stack:
+                    out_sequences = [seq_stack.enter_context(out_ring.begin_sequence(
+                        str(int(time.time() * 1000000)),
+                        int(time.time() * 1000000),
+                        header=json.dumps(self.header[ring_name]),
+                        nringlet=1)) for out_ring, ring_name in self.izip(out_rings, args)]
 
                     # This variable, as documented in __init__, acts as a trigger
                     # to cause a new sequence to generated. Set it to be True
@@ -326,13 +334,12 @@ class MultiTransformBlock(object):
                     # on a new sequence.
                     self.trigger_sequence = False
 
-                    #TODO: Eventually this could be used on each ring individually.
+                    # TODO: Eventually this could be used on each ring individually.
                     while not self.trigger_sequence:
 
-                        with nested(*[out_sequence.reserve(self.gulp_size[ring_name]) \
-                                for out_sequence, ring_name in self.izip(
-                                    out_sequences,
-                                    args)]) as out_spans:
+                        with ExitStack() as span_stack:
+                            out_spans = [span_stack.enter_context(out_sequence.reserve(self.gulp_size[ring_name]))
+                                      for out_sequence, ring_name in self.izip(out_sequences, args)]
 
                             dtypes = {}
                             for ring_name in args:
@@ -359,17 +366,17 @@ class SplitterBlock(MultiTransformBlock):
         self.header['out_1'] = {}
         self.header['out_1']['dtype'] = str(np.float32)
         self.header['out_1']['nbit'] = 32
-        #TODO: These sections should be applied to the incoming shapes
+        # TODO: These sections should be applied to the incoming shapes
         self.header['out_1']['shape'] = sections[0]
         self.header['out_2'] = self.header['out_1']
         self.header['out_2']['shape'] = sections[1]
     def load_settings(self):
         """Set the gulp sizes appropriate to the input ring"""
-        self.gulp_size['in'] = np.product(self.header['in']['shape'])*self.header['in']['nbit']//8
-        self.gulp_size['out_1'] = self.gulp_size['in']*np.product(self.header['out_1']['shape']) \
-                                    //np.product(self.header['in']['shape'])
-        self.gulp_size['out_2'] = self.gulp_size['in']*np.product(self.header['out_2']['shape']) \
-                                    //np.product(self.header['in']['shape'])
+        self.gulp_size['in'] = np.prod(self.header['in']['shape']) * self.header['in']['nbit'] // 8
+        self.gulp_size['out_1'] = (self.gulp_size['in'] * np.prod(self.header['out_1']['shape']) //
+                                   np.prod(self.header['in']['shape']))
+        self.gulp_size['out_2'] = (self.gulp_size['in'] * np.prod(self.header['out_2']['shape']) //
+                                   np.prod(self.header['in']['shape']))
     def main(self):
         """Split the incoming ring into the outputs rings"""
         for inspan, outspan1, outspan2 in self.izip(
@@ -385,11 +392,11 @@ class MultiAddBlock(MultiTransformBlock):
         'in_2': 'Second input to add. List of floats',
         'out_sum': 'Result of add. List of floats.'}
     def __init__(self, *args, **kwargs):
-        #can hard code these, or calculate them during load_settings
+        # can hard code these, or calculate them during load_settings
         super(MultiAddBlock, self).__init__()
-        self.gulp_size['in_1'] = 2*4
-        self.gulp_size['in_2'] = 2*4
-        self.gulp_size['out_sum'] = 2*4
+        self.gulp_size['in_1'] = 2 * 4
+        self.gulp_size['in_2'] = 2 * 4
+        self.gulp_size['out_sum'] = 2 * 4
         self.header['out_sum'] = {}
         self.header['out_sum']['dtype'] = str(np.float32)
         self.header['out_sum']['nbit'] = '32'
@@ -414,16 +421,16 @@ class TestingBlock(SourceBlock):
         if complex_numbers:
             self.test_array = np.array(test_array).astype(np.complex64)
             header = {
-                'nbit':64,
-                'dtype':'complex64',
-                'shape':self.test_array.shape}
+                'nbit': 64,
+                'dtype': 'complex64',
+                'shape': self.test_array.shape}
             self.dtype = np.complex64
         else:
             self.test_array = np.array(test_array).astype(np.float32)
             header = {
-                'nbit':32,
-                'dtype':'float32',
-                'shape':self.test_array.shape}
+                'nbit': 32,
+                'dtype': 'float32',
+                'shape': self.test_array.shape}
             self.dtype = np.float32
         self.output_header = json.dumps(header)
     def main(self, output_ring):
@@ -442,14 +449,14 @@ class WriteHeaderBlock(SinkBlock):
     def load_settings(self, input_header):
         """Load the header from json
         @param[in] input_header The header from the ring"""
-        write_file = open(self.filename, 'w')
-        write_file.write(str(json.loads(input_header.tostring())))
+        with open(self.filename, 'w') as write_file:
+            write_file.write(str(json.loads(input_header.tobytes())))
     def main(self, input_ring):
         """Put the header into the file
         @param[in] input_ring Contains the header in question"""
         self.gulp_size = 1
         span_dummy_generator = self.iterate_ring_read(input_ring)
-        span_dummy_generator.next()
+        next(span_dummy_generator)
 class FFTBlock(TransformBlock):
     """Performs complex to complex 1D FFT on input ring data"""
     def __init__(self, gulp_size):
@@ -458,7 +465,7 @@ class FFTBlock(TransformBlock):
         self.dtype = np.uint8
         self.shape = (1, 1)
     def load_settings(self, input_header):
-        header = json.loads(input_header.tostring())
+        header = json.loads(input_header.tobytes())
         self.nbit = header['nbit']
         self.dtype = np.dtype(header['dtype'].split()[1].split(".")[1].split("'")[0]).type
         if 'frame_shape' in header:
@@ -487,7 +494,7 @@ class FFTBlock(TransformBlock):
         data_accumulate = data_accumulate.astype(np.complex64)
         self.out_gulp_size = data_accumulate.nbytes
         outspan_generator = self.iterate_ring_write(output_rings[0])
-        ospan = outspan_generator.next()
+        ospan = next(outspan_generator)
         result = np.fft.fft(data_accumulate).astype(np.complex64)
         ospan.data_view(np.complex64)[0] = result.ravel()
 class IFFTBlock(TransformBlock):
@@ -498,7 +505,7 @@ class IFFTBlock(TransformBlock):
         self.nbit = 8
         self.dtype = np.uint8
     def load_settings(self, input_header):
-        header = json.loads(input_header.tostring())
+        header = json.loads(input_header.tobytes())
         self.nbit = header['nbit']
         try:
             self.dtype = np.dtype(header['dtype']).type
@@ -512,7 +519,7 @@ class IFFTBlock(TransformBlock):
         """
         @param[in] input_rings First ring in this list will be used for
             data input.
-        @param[out] output_rings First ring in this list will be used for 
+        @param[out] output_rings First ring in this list will be used for
             data output."""
         data_accumulate = None
         for ispan in self.iterate_ring_read(input_rings[0]):
@@ -527,7 +534,7 @@ class IFFTBlock(TransformBlock):
         data_accumulate = data_accumulate.astype(np.complex64)
         self.out_gulp_size = data_accumulate.nbytes
         outspan_generator = self.iterate_ring_write(output_rings[0])
-        ospan = outspan_generator.next()
+        ospan = next(outspan_generator)
         result = np.fft.ifft(data_accumulate)
         ospan.data_view(np.complex64)[0][:] = result[:]
 class WriteAsciiBlock(SinkBlock):
@@ -541,9 +548,9 @@ class WriteAsciiBlock(SinkBlock):
         self.gulp_size = gulp_size
         self.nbit = 8
         self.dtype = np.uint8
-        open(self.filename, "w").close() ## erase file
+        open(self.filename, "w").close() # erase file
     def load_settings(self, input_header):
-        header_dict = json.loads(input_header.tostring())
+        header_dict = json.loads(input_header.tobytes())
         self.nbit = header_dict['nbit']
         try:
             self.dtype = np.dtype(header_dict['dtype']).type
@@ -571,8 +578,8 @@ class WriteAsciiBlock(SinkBlock):
                 data_accumulate = np.concatenate((data_accumulate, unpacked_data[0]))
             else:
                 data_accumulate = unpacked_data[0]
-        text_file = open(self.filename, 'a')
-        np.savetxt(text_file, data_accumulate.reshape((1, -1)))
+        with open(self.filename, 'a') as text_file:
+            np.savetxt(text_file, data_accumulate.reshape((1, -1)))
 class CopyBlock(TransformBlock):
     """Copies input ring's data to the output ring"""
     def __init__(self, gulp_size=1048576):
@@ -582,7 +589,7 @@ class CopyBlock(TransformBlock):
         input_ring = input_rings[0]
         for output_ring in output_rings:
             for ispan, ospan in self.ring_transfer(input_ring, output_ring):
-                bifrost.memory.memcpy2D(ospan.data, ispan.data)
+                copy_array(ospan.data, ispan.data)
 class SigprocReadBlock(SourceBlock):
     """This block reads in a sigproc filterbank
     (.fil) file into a ring buffer"""
@@ -607,8 +614,8 @@ class SigprocReadBlock(SourceBlock):
             ifile.read_header()
             ohdr = {}
             ohdr['frame_shape'] = (ifile.nchans, ifile.nifs)
-            ohdr['frame_size'] = ifile.nchans*ifile.nifs
-            ohdr['frame_nbyte'] = ifile.nchans*ifile.nifs*ifile.nbits/8
+            ohdr['frame_size'] = ifile.nchans * ifile.nifs
+            ohdr['frame_nbyte'] = ifile.nchans * ifile.nifs * ifile.nbits // 8
             ohdr['frame_axes'] = ('pol', 'chan')
             ohdr['ringlet_shape'] = (1,)
             ohdr['ringlet_axes'] = ()
@@ -619,7 +626,7 @@ class SigprocReadBlock(SourceBlock):
             ohdr['fch1'] = float(ifile.header['fch1'])
             ohdr['foff'] = float(ifile.header['foff'])
             self.output_header = json.dumps(ohdr)
-            self.gulp_size = self.gulp_nframe*ifile.nchans*ifile.nifs*ifile.nbits/8
+            self.gulp_size = self.gulp_nframe * ifile.nchans * ifile.nifs * ifile.nbits // 8
             out_span_generator = self.iterate_ring_write(output_ring)
             for span in out_span_generator:
                 output_size = ifile.file_object.readinto(span.data.data)
@@ -647,7 +654,7 @@ class KurtosisBlock(TransformBlock):
         self.dtype = np.uint8
     def load_settings(self, input_header):
         self.output_header = input_header
-        self.settings = json.loads(input_header.tostring())
+        self.settings = json.loads(input_header.tobytes())
         self.nchan = self.settings["frame_shape"][0]
         dtype_str = self.settings["dtype"].split()[1].split(".")[1].split("'")[0]
         self.dtype = np.dtype(dtype_str)
@@ -657,11 +664,11 @@ class KurtosisBlock(TransformBlock):
             output ring."""
         expected_v2 = 0.5
         for ispan, ospan in self.ring_transfer(input_rings[0], output_rings[0]):
-            nsample = ispan.size/self.nchan/(self.settings['nbit']/8)
+            nsample = ispan.size // self.nchan // (self.settings['nbit'] // 8)
             # Raw data -> power array of the right type
             power = ispan.data.reshape(
                 nsample,
-                self.nchan*self.settings['nbit']/8).view(self.dtype)
+                self.nchan * self.settings['nbit'] // 8).view(self.dtype)
             # Following section 3.1 of the Nita paper.
             # the sample is a power value in a frequency bin from an FFT,
             # i.e. the beamformer values in a channel
@@ -671,15 +678,15 @@ class KurtosisBlock(TransformBlock):
                 nita_s1 = np.sum(power[:, chan])
                 nita_s2 = np.sum(power[:, chan]**2)
                 # equation 21
-                nita_v2 = (number_samples/(number_samples-1))*\
-                    (number_samples*nita_s2/(nita_s1**2)-1)
-                if abs(expected_v2-nita_v2) > 0.1:
+                nita_v2 = ((number_samples / (number_samples - 1)) *
+                           (number_samples * nita_s2 / (nita_s1**2) - 1))
+                if abs(expected_v2 - nita_v2) > 0.1:
                     bad_channels.append(chan)
             flag_power = power.copy()
             for chan in range(self.nchan):
                 if chan in bad_channels:
                     # TODO: bf.ndarray.__setitem__ doesn't support scalar assignment (or broadcasting and/or type conversion in general)
-                    #flag_power[:, chan] = 0    # set bad channel to zero
+                    # flag_power[:, chan] = 0    # set bad channel to zero
                     flag_power[:, chan] = np.zeros(nsample, dtype=self.dtype)    # set bad channel to zero
             ospan.data[0][:] = flag_power.view(dtype=np.uint8).ravel()
 
@@ -716,7 +723,7 @@ class FoldBlock(TransformBlock):
     """This block folds a signal into a histogram"""
     def __init__(
             self, bins, period=1e-3,
-            gulp_size=4096*256, dispersion_measure=0,
+            gulp_size=4096 * 256, dispersion_measure=0,
             core=-1):
         """
         @param[in] bins The total number of bins to fold into
@@ -732,7 +739,7 @@ class FoldBlock(TransformBlock):
         self.bins = bins
         self.gulp_size = gulp_size
         self.period = period
-        self.dispersion_measure = dispersion_measure 
+        self.dispersion_measure = dispersion_measure
         self.core = core
         self.data_settings = {}
     def calculate_bin_indices(
@@ -745,23 +752,22 @@ class FoldBlock(TransformBlock):
         @param[in] data_size Number of elements
         @return Which bin each sample is folded into
         """
-        arrival_time = tstart+tsamp*np.arange(data_size)
+        arrival_time = tstart + tsamp * np.arange(data_size)
         phase = np.fmod(arrival_time, self.period)
-        return np.floor(phase/self.period*self.bins).astype(int)
+        return np.floor(phase / self.period * self.bins).astype(int)
     def calculate_delay(self, frequency, reference_frequency):
         """Calculate the time delay because of frequency dispersion
         @param[in] frequency The current channel's frequency(MHz)
-        @param[in] reference_frequency The frequency of the 
+        @param[in] reference_frequency The frequency of the
             channel we will hold at zero time delay(MHz)"""
-        frequency_factor = \
-            np.power(reference_frequency/1000, -2) -\
-            np.power(frequency/1000, -2)
-        return 4.15e-3*self.dispersion_measure*frequency_factor
+        frequency_factor = (np.power(reference_frequency / 1000, -2) -
+                            np.power(frequency / 1000, -2))
+        return 4.15e-3 * self.dispersion_measure * frequency_factor
     def load_settings(self, input_header):
         self.data_settings = json.loads(
             "".join(
                 [chr(item) for item in input_header]))
-        self.output_header = json.dumps({'nbit':32, 'dtype': str(np.float32)})
+        self.output_header = json.dumps({'nbit': 32, 'dtype': str(np.float32)})
     def main(self, input_rings, output_rings):
         """Generate a histogram from the input ring data
         @param[in] input_rings List with first ring containing
@@ -786,19 +792,19 @@ class FoldBlock(TransformBlock):
                 sort_indices = np.argsort(
                     self.calculate_bin_indices(
                         modified_tstart, self.data_settings['tsamp'],
-                        span.data.shape[1]/nchans))
+                        span.data.shape[1] // nchans))
                 sorted_data = span.data[0][chan::nchans][sort_indices]
-                extra_elements = np.round(self.bins*(1-np.modf(
-                    float(span.data.shape[1]/nchans)/self.bins)[0])).astype(int)
+                extra_elements = np.round(self.bins * (1 - np.modf(
+                    float(span.data.shape[1] // nchans) / self.bins)[0])).astype(int)
                 sorted_data = insert_zeros_evenly(sorted_data, extra_elements)
                 histogram += np.sum(
                     sorted_data.reshape(self.bins, -1), 1).astype(np.float32)
-            tstart += self.data_settings['tsamp']*\
-                self.gulp_size*8/self.data_settings['nbit']/nchans
-        self.out_gulp_size = self.bins*4
+            tstart += (self.data_settings['tsamp'] *
+                       self.gulp_size * 8 / self.data_settings['nbit'] / nchans)
+        self.out_gulp_size = self.bins * 4
         out_span_generator = self.iterate_ring_write(output_rings[0])
-        out_span = out_span_generator.next()
-        bifrost.memory.memcpy(
+        out_span = next(out_span_generator)
+        copy_array(
             out_span.data_view(dtype=np.float32),
             histogram)
 
@@ -834,24 +840,28 @@ class WaterfallBlock(object):
             thread-safe backend for pyplot, and labelling
             the plot using the header information from the
             ring
-        @param[in] waterfall_matrix x axis is frequency and 
+        @param[in] waterfall_matrix x axis is frequency and
             y axis is time. Values should be power.
             """
+        import matplotlib
+        # Use a graphical backend which supports threading
+        matplotlib.use('Agg')
+        from matplotlib import pyplot as plt
         plt.ioff()
-        print "Interactive mode off"
-        print waterfall_matrix.shape
+        print("Interactive mode off")
+        print(waterfall_matrix.shape)
         fig = pylab.figure()
         ax = fig.gca()
         header = self.header
         ax.set_xticks(
-            np.arange(0, 1.33, 0.33)*waterfall_matrix.shape[1])
+            np.arange(0, 1.33, 0.33) * waterfall_matrix.shape[1])
         ax.set_xticklabels(
-            header['fch1']-np.arange(0,4)*header['foff'])
+            header['fch1'] - np.arange(0, 4) * header['foff'])
         ax.set_xlabel("Frequency [MHz]")
         ax.set_yticks(
-            np.arange(0, 1.125, 0.125)*waterfall_matrix.shape[0])
+            np.arange(0, 1.125, 0.125) * waterfall_matrix.shape[0])
         ax.set_yticklabels(
-            header['tstart']+header['tsamp']*np.arange(0, 1.125, 0.125)*waterfall_matrix.shape[0])
+            header['tstart'] + header['tsamp'] * np.arange(0, 1.125, 0.125) * waterfall_matrix.shape[0])
         ax.set_ylabel("Time (s)")
         plt.pcolormesh(
             waterfall_matrix, axes=ax, figure=fig)
@@ -866,26 +876,26 @@ class WaterfallBlock(object):
         self.ring.resize(self.gulp_nframe)
         # Generate a waterfall matrix:
         for sequence in self.ring.read(guarantee=True):
-            ## Get the sequence's header as a dictionary
+            # Get the sequence's header as a dictionary
             self.header = json.loads(
                 "".join(
                     [chr(item) for item in sequence.header]))
             tstart = self.header['tstart']
             tsamp = self.header['tsamp']
             nchans = self.header['frame_shape'][0]
-            gulp_size = self.gulp_nframe*nchans*self.header['nbit']
+            gulp_size = self.gulp_nframe * nchans * self.header['nbit']
             waterfall_matrix = np.zeros(shape=(0, nchans))
-            print tstart, tsamp, nchans
+            print(tstart, tsamp, nchans)
             for span in sequence.read(gulp_size):
-                array_size = span.data.shape[1]/nchans
+                array_size = span.data.shape[1] // nchans
                 frequency = self.header['fch1']
                 try:
                     curr_data = np.reshape(
-                        span.data,(-1, nchans))
+                        span.data, (-1, nchans))
                     waterfall_matrix = np.concatenate(
                         (waterfall_matrix, curr_data), 0)
                 except:
-                    print "Bad shape for waterfall"
+                    print("Bad shape for waterfall")
         return waterfall_matrix
 class NumpyBlock(MultiTransformBlock):
     """Perform an arbitrary N ndarray -> M ndarray numpy function
@@ -901,8 +911,8 @@ class NumpyBlock(MultiTransformBlock):
             @param[in] outputs The number of output rings and the number of output
                 numpy arrays from the function."""
         super(NumpyBlock, self).__init__()
-        self.inputs = ['in_%d' % (i+1) for i in range(inputs)]
-        self.outputs = ['out_%d' % (i+1) for i in range(outputs)]
+        self.inputs = [f"in_{i + 1}" for i in range(inputs)]
+        self.outputs = [f"out_{i + 1}" for i in range(outputs)]
         self.ring_names = {}
         self.create_ring_names()
         self.function = function
@@ -939,7 +949,7 @@ class NumpyBlock(MultiTransformBlock):
             self.gulp_size[output_name] = nbytes
             self.header[output_name] = {}
             self.header[output_name]['dtype'] = str(test_output_array.dtype)
-            self.header[output_name]['nbit'] = 8*nbytes//nelements
+            self.header[output_name]['nbit'] = 8 * nbytes // nelements
             self.header[output_name]['shape'] = list(test_output_array.shape)
 
     def reshape_inspans(self, inspans):
@@ -985,7 +995,7 @@ class NumpyBlock(MultiTransformBlock):
                 if self.did_header_change(old_header):
                     self.trigger_sequence = True
 
-                outspans = outspan_generator.next()
+                outspans = next(outspan_generator)
                 for i in range(number_outputs):
                     outspans[i][:] = output_arrays[i].ravel()
 
@@ -1001,14 +1011,14 @@ class NumpySourceBlock(MultiTransformBlock):
                 equal to the number of outgoing rings attached to this block.
             @param[in] changing Whether or not the arrays will be different in shape"""
         super(NumpySourceBlock, self).__init__()
-        outputs = ['out_%d'%(i+1) for i in range(outputs)]
+        outputs = [f"out_{i + 1}" for i in range(outputs)]
         self.ring_names = {}
         for output_name in outputs:
             ring_description = "Output number " + output_name[4:]
             self.ring_names[output_name] = ring_description
         assert callable(generator)
         self.generator = generator()
-        assert hasattr(self.generator, 'next')
+        assert hasattr(self.generator, '__next__') or hasattr(self.generator, 'next')
         self.grab_headers = grab_headers
         self.changing = changing
 
@@ -1017,11 +1027,11 @@ class NumpySourceBlock(MultiTransformBlock):
             @param[in] arrays The arrays outputted by self.generator"""
         for index in range(len(self.ring_names)):
             assert isinstance(arrays[index], np.ndarray)
-            ring_name = 'out_%d' % (index+1)
+            ring_name = f"out_{index + 1}"
             self.header[ring_name] = {
                 'dtype': str(arrays[index].dtype),
                 'shape': list(arrays[index].shape),
-                'nbit': arrays[index].nbytes*8//arrays[index].size}
+                'nbit': arrays[index].nbytes * 8 // arrays[index].size}
             self.gulp_size[ring_name] = arrays[index].nbytes
 
     def load_user_headers(self, headers, arrays):
@@ -1029,16 +1039,16 @@ class NumpySourceBlock(MultiTransformBlock):
             @param[in] headers List of dictionaries from self.generator
                 for each ring's sequence header"""
         for i, header in enumerate(headers):
-            ring_name = 'out_%d'%(i+1)
+            ring_name = f"out_{i + 1}"
             for parameter in header:
                 self.header[ring_name][parameter] = header[parameter]
             if 'dtype' in header:
                 assert 'nbit' in header
-                self.gulp_size[ring_name] = arrays[i].size*self.header[ring_name]['nbit']//8
+                self.gulp_size[ring_name] = arrays[i].size * self.header[ring_name]['nbit'] // 8
 
     def main(self):
         """Call self.generator and output the arrays into the output"""
-        output_data = self.generator.next()
+        output_data = next(self.generator)
 
         if self.grab_headers:
             arrays = output_data[0::2]
@@ -1052,13 +1062,13 @@ class NumpySourceBlock(MultiTransformBlock):
         if self.grab_headers:
             self.load_user_headers(headers, arrays)
 
-        for outspans in self.write(*['out_%d'%(i+1) for i in range(len(self.ring_names))]):
+        for outspans in self.write(*[f"out_{i + 1}" for i in range(len(self.ring_names))]):
             for i in range(len(self.ring_names)):
-                dtype = self.header['out_%d'%(i+1)]['dtype']
+                dtype = self.header[f"out_{i + 1}"]['dtype']
                 outspans[i][:] = arrays[i].astype(np.dtype(dtype).type).ravel()
 
             try:
-                output_data = self.generator.next()
+                output_data = next(self.generator)
 
                 if self.grab_headers:
                     arrays = output_data[0::2]
@@ -1068,7 +1078,7 @@ class NumpySourceBlock(MultiTransformBlock):
                         arrays = [output_data]
                     else:
                         arrays = output_data
-            except StopIteration:
+            except (EndOfDataStop, StopIteration):
                 break
 
             if self.changing:

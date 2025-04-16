@@ -1,5 +1,4 @@
 # Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,6 +32,8 @@ import bifrost as bf
 import bifrost.pipeline as bfp
 import bifrost.blocks as blocks
 
+from bifrost.libbifrost_generated import BF_CUDA_ENABLED
+
 class CallbackBlock(blocks.CopyBlock):
     """Testing-only block which calls user-defined
         functions on sequence and on data"""
@@ -47,6 +48,7 @@ class CallbackBlock(blocks.CopyBlock):
         self.data_callback(ispan, ospan)
         return super(CallbackBlock, self).on_data(ispan, ospan)
 
+@unittest.skipUnless(BF_CUDA_ENABLED, "requires GPU support")
 class TestScrunchBlock(unittest.TestCase):
     def setUp(self):
         """Create settings shared between tests"""
@@ -97,7 +99,7 @@ class TestScrunchBlock(unittest.TestCase):
     @unittest.skip("TODO: Fix this test!")
     def test_simple_scrunch(self):
         """Check that scrunching 2 spans changes header correctly"""
-        self.shape_settings = [-1, 1, 2*2]
+        self.shape_settings = [-1, 1, 2 * 2]
         self.gulp_nframe = 101
         with bfp.Pipeline() as pipeline:
             data = blocks.sigproc.read_sigproc([self.fil_file], self.gulp_nframe)

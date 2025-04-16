@@ -1,5 +1,4 @@
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -25,11 +24,17 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import absolute_import
+import pprint
 
 from bifrost.pipeline import SinkBlock
 
+from threading import Lock
+
+from bifrost import telemetry
+telemetry.track_module()
+
 class PrintHeaderBlock(SinkBlock):
+    lock = Lock()
     def __init__(self, iring, *args, **kwargs):
         """Prints out the header of each new sequence of a ring
 
@@ -38,7 +43,11 @@ class PrintHeaderBlock(SinkBlock):
         super(PrintHeaderBlock, self).__init__(iring, *args, **kwargs)
     def on_sequence(self, iseq):
         ihdr = iseq.header
-        print ihdr
+        with PrintHeaderBlock.lock:
+            print("-----")
+            print("Block", self.iring.owner.name, ihdr['name'])
+            pprint.pprint(ihdr)
+            print("-----")
     def on_sequence_end(self, iseq):
         pass
     def on_data(self, ispan):

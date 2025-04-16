@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,15 +25,19 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import absolute_import
-
 from bifrost.pipeline import SourceBlock, SinkBlock
 import bifrost.sigproc2 as sigproc
 from bifrost.DataType import DataType
 from bifrost.units import convert_units
+from bifrost.ring2 import Ring, ReadSequence, ReadSpan, WriteSpan
+from numpy import transpose
 
-from copy import deepcopy
 import os
+
+from typing import Any, Dict, List, Optional
+
+from bifrost import telemetry
+telemetry.track_module()
 
 def _get_with_default(obj, key, default=None):
     return obj[key] if key in obj else default
@@ -46,12 +49,12 @@ def _unix2mjd(unix):
     return unix / 86400. + 40587
 
 class SigprocSourceBlock(SourceBlock):
-    def __init__(self, filenames, gulp_nframe, unpack=True, *args, **kwargs):
+    def __init__(self, filenames: List[str], gulp_nframe: int, unpack: bool=True, *args, **kwargs):
         super(SigprocSourceBlock, self).__init__(filenames, gulp_nframe, *args, **kwargs)
         self.unpack = unpack
-    def create_reader(self, sourcename):
+    def create_reader(self, sourcename: str) -> sigproc.SigprocFile:
         return sigproc.SigprocFile(sourcename)
-    def on_sequence(self, ireader, sourcename):
+    def on_sequence(self, ireader: sigproc.SigprocFile, sourcename: str) -> List[Dict[str,Any]]:
         ihdr = ireader.header
         assert(ihdr['data_type'] in [1,  # filterbank
                                      2,  # (dedispersed) time series
@@ -65,15 +68,15 @@ class SigprocSourceBlock(SourceBlock):
             nbit = max(nbit, 8)
         ohdr = {
             '_tensor': {
-                'dtype':  ['u','i'][ihdr['signed']] + str(nbit),
+                'dtype':  ['u', 'i'][ihdr['signed']] + str(nbit),
                 'shape':  [-1, ihdr['nifs'], ihdr['nchans']],
                 'labels': ['time', 'pol', 'freq'],
-                'scales': [(tstart_unix,ihdr['tsamp']),
+                'scales': [(tstart_unix, ihdr['tsamp']),
                            None,
-                           (ihdr['fch1'],ihdr['foff'])],
+                           (ihdr['fch1'], ihdr['foff'])],
                 'units':  ['s', None, 'MHz']
             },
-            'frame_rate': 1./ihdr['tsamp'], # TODO: Used for anything?
+            'frame_rate': 1. / ihdr['tsamp'], # TODO: Used for anything?
             'source_name':   _get_with_default(ihdr, 'source_name'),
             'rawdatafile':   _get_with_default(ihdr, 'rawdatafile'),
             'az_start':      _get_with_default(ihdr, 'az_start'),
@@ -98,14 +101,14 @@ class SigprocSourceBlock(SourceBlock):
         ohdr['time_tag'] = time_tag
         ohdr['name']     = sourcename
         return [ohdr]
-    def on_data(self, reader, ospans):
+    def on_data(self, reader: sigproc.SigprocFile, ospans: List[WriteSpan]) -> List[int]:
         ospan = ospans[0]
-        #print "SigprocReadBlock::on_data", ospan.data.dtype
+        #print("SigprocReadBlock::on_data", ospan.data.dtype)
         if self.unpack:
             indata = reader.read(ospan.shape[0])
             nframe = indata.shape[0]
-            #print indata.shape, indata.dtype, nframe
-            #print indata
+            #print(indata.shape, indata.dtype, nframe)
+            #print(indata)
             ospan.data[:nframe] = indata
             # TODO: This will break when frame size < 1 byte
             #         Can't use frame_nbyte; must use something like frame_nbit
@@ -117,7 +120,7 @@ class SigprocSourceBlock(SourceBlock):
             #             bits.
             #           Multiple pols could be included, but only if chan and pol
             #             dims are merged together.
-            #print "NBYTE", nbyte
+            #print("NBYTE", nbyte)
             #assert(nbyte % reader.frame_nbyte == 0)
             #nframe = nbyte // reader.frame_nbyte
         else:
@@ -127,7 +130,8 @@ class SigprocSourceBlock(SourceBlock):
             nframe = nbyte // ospan.frame_nbyte
         return [nframe]
 
-def read_sigproc(filenames, gulp_nframe, unpack=True, *args, **kwargs):
+def read_sigproc(filenames: List[str], gulp_nframe: int, unpack: bool=True,
+                 *args, **kwargs) -> SigprocSourceBlock:
     """Read SIGPROC data files.
 
     Capable of reading filterbank, time series, and dedispersed subband data.
@@ -156,19 +160,19 @@ def _copy_item_if_exists(dst, src, key, newkey=None):
         dst[newkey] = src[key]
 
 class SigprocSinkBlock(SinkBlock):
-    def __init__(self, iring, path=None, *args, **kwargs):
+    def __init__(self, iring: Ring, path: Optional[str]=None, *args, **kwargs):
         super(SigprocSinkBlock, self).__init__(iring, *args, **kwargs)
         if path is None:
             path = ''
         self.path = path
-    def on_sequence(self, iseq):
+    def on_sequence(self, iseq: ReadSequence) -> None:
         ihdr = iseq.header
         itensor = ihdr['_tensor']
 
-        axnames = tuple(itensor['labels'])
-        shape   = itensor['shape']
-        scales  = itensor['scales']
-        units   = itensor['units']
+        axnames = list(itensor['labels'])
+        shape   = list(itensor['shape'])
+        scales  = list(itensor['scales'])
+        units   = list(itensor['units'])
         ndim    = len(shape)
         dtype   = DataType(itensor['dtype'])
 
@@ -201,7 +205,7 @@ class SigprocSinkBlock(SinkBlock):
 
         filename = os.path.join(self.path, ihdr['name'])
 
-        if ndim >= 3 and axnames[-3:] == ('time', 'pol', 'freq'):
+        if ndim >= 3 and axnames[-3:] == ['time', 'pol', 'freq']:
             self.data_format = 'filterbank'
             assert(dtype.is_real)
             sigproc_hdr['data_type'] = 1
@@ -221,19 +225,33 @@ class SigprocSinkBlock(SinkBlock):
                 sigproc.write_header(sigproc_hdr, self.ofile)
             elif ndim == 4:
                 if axnames[-4] != 'beam':
-                    raise ValueError("Expected first axis to be 'beam'")
+                    raise ValueError("Expected first axis to be 'beam'"
+                                     " got '%s'" % axnames[-4])
                 nbeam = shape[-4]
                 sigproc_hdr['nbeams'] = nbeam
-                filenames = [filename + '.%06iof.%06i.fil' % (b+1, nbeam)
-                             for b in xrange(nbeam)]
+                filenames = [filename + '.%06iof.%06i.fil' % (b + 1, nbeam)
+                             for b in range(nbeam)]
                 self.ofiles = [open(fname, 'wb') for fname in filenames]
-                for b in xrange(nbeam):
+                for b in range(nbeam):
                     sigproc_hdr['ibeam'] = b
                     sigproc.write_header(sigproc_hdr, self.ofiles[b])
             else:
                 raise ValueError("Too many dimensions")
 
-        elif ndim >= 2 and axnames[-2:] == ('time', 'pol'):
+        elif ndim >= 2 and 'time' in axnames and 'pol' in axnames:
+            pol_axis = axnames.index('pol')
+            if pol_axis != ndim - 1:
+                # Need to move pol axis
+                # Note: We support this because it tends to be convenient
+                #         for rest of the pipeline to operate with pol being
+                #         the first dim, and doing the transpose on the fly
+                #         inside this block is unlikely to cost much relative
+                #         to disk perf (and it's free if npol==1).
+                axnames.append(axnames[pol_axis]); del axnames[pol_axis]
+                shape.append(shape[pol_axis]);     del shape[pol_axis]
+                scales.append(scales[pol_axis]);   del scales[pol_axis]
+                units.append(units[pol_axis]);     del units[pol_axis]
+            self.pol_axis = pol_axis
             self.data_format = 'timeseries'
             assert(dtype.is_real)
             sigproc_hdr['data_type'] = 2
@@ -258,12 +276,13 @@ class SigprocSinkBlock(SinkBlock):
                 self.ofile = open(filename, 'wb')
                 sigproc.write_header(sigproc_hdr, self.ofile)
             elif ndim == 3:
-                if axnames[-3] != 'dispersion measure':
-                    raise ValueError("Expected first axis to be 'dispersion measure'")
+                if axnames[-3] != 'dispersion':
+                    raise ValueError("Expected first axis to be 'dispersion'"
+                                     " got '%s'" % axnames[-3])
                 ndm = shape[-3]
                 dm0 = scales[-3][0]
                 ddm = scales[-3][1]
-                dms = [dm0+ddm*d for d in xrange(ndm)]
+                dms = [dm0 + ddm * d for d in range(ndm)]
                 dms = [convert_units(dm, units[-3], 'pc cm^-3') for dm in dms]
                 filenames = [filename + '.%09.2f.tim' % dm for dm in dms]
                 self.ofiles = [open(fname, 'wb') for fname in filenames]
@@ -273,7 +292,7 @@ class SigprocSinkBlock(SinkBlock):
             else:
                 raise ValueError("Too many dimensions")
 
-        elif ndim == 4 and axnames[-3:] == ('pol', 'freq', 'phase'):
+        elif ndim == 4 and axnames[-3:] == ['pol', 'freq', 'phase']:
             self.data_format = 'pulseprofile'
             assert(dtype.is_real)
             sigproc_hdr['data_type'] = 2
@@ -295,29 +314,38 @@ class SigprocSinkBlock(SinkBlock):
             self.dt = scales[-4][1]
 
         else:
-            raise ValueError("Axis labels do not correspond to a known data format: "+
-                             str(axnames))
+            raise ValueError("Axis labels do not correspond to a known data format: " +
+                             str(axnames) + "\nKnown formats are:" +
+                             "\n  [time, pol, freq]\n  [beam, time, pol]\n" +
+                             "  [time, pol]\n  [dispersion, time, pol]\n" +
+                             "  [pol, freq, phase]")
 
-    def on_sequence_end(self, iseq):
+    def on_sequence_end(self, iseq: ReadSequence) -> None:
         if hasattr(self, 'ofile'):
             self.ofile.close()
         elif hasattr(self, 'ofiles'):
             for ofile in self.ofiles:
                 ofile.close()
 
-    def on_data(self, ispan):
+    def on_data(self, ispan: ReadSpan) -> None:
         idata = ispan.data
         if self.data_format == 'filterbank':
             if len(idata.shape) == 3:
                 idata.tofile(self.ofile)
             else:
-                for b in xrange(idata.shape[0]):
+                for b in range(idata.shape[0]):
                     idata[b].tofile(self.ofiles[b])
         elif self.data_format == 'timeseries':
-            if len(idata.shape) == 2:
+            ndim = len(idata.shape)
+            if self.pol_axis != ndim - 1:
+                perm = list(range(ndim))
+                del perm[self.pol_axis]
+                perm.append(self.pol_axis);
+                idata = transpose(idata, perm)
+            if ndim == 2:
                 idata.tofile(self.ofile)
             else:
-                for d in xrange(idata.shape[0]):
+                for d in range(idata.shape[0]):
                     idata[d].tofile(self.ofiles[d])
         elif self.data_format == 'pulseprofile':
             time_unix = self.t0 + ispan.frame_offset * self.dt
@@ -329,14 +357,15 @@ class SigprocSinkBlock(SinkBlock):
         else:
             raise ValueError("Internal error: Unknown data format!")
 
-def write_sigproc(iring, path=None, *args, **kwargs):
+def write_sigproc(iring: Ring, path: Optional[str]=None,
+                  *args, **kwargs) -> SigprocSinkBlock:
     """Write data as Sigproc files.
 
     Args:
         iring (Ring or Block): Input data source.
         path (str): Path specifying where to write output files.
-        *args: Arguments to ``bifrost.pipeline.TransformBlock``.
-        **kwargs: Keyword Arguments to ``bifrost.pipeline.TransformBlock``.
+        *args: Arguments to ``bifrost.pipeline.SinkBlock``.
+        **kwargs: Keyword Arguments to ``bifrost.pipeline.SinkBlock``.
 
     **Tensor semantics**::
 

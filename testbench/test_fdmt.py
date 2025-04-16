@@ -1,6 +1,6 @@
-#!/usr/bin/env python
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+#!/usr/bin/env python3
+
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -35,8 +35,10 @@ Measure Transform (FDMT), writing the output to a PGM file.
 
 import bifrost.pipeline as bfp
 from bifrost.blocks import read_sigproc, copy, transpose, fdmt, scrunch
+from bifrost import blocks
 
 import os
+import argparse
 import numpy as np
 
 # This is a (very hacky) sink block for writing data as a greyscale PGM image
@@ -59,16 +61,16 @@ class PgmWriterBlock(bfp.SinkBlock):
         maxval = 255
         filename = os.path.join(self.outpath, self.filename_callback(ihdr))
         self.outfile = open(filename, 'wb')
-        self.outfile.write("P5\n")
+        self.outfile.write(b"P5\n")
         # HACK This sets the height to gulp_nframe because we don't know the
         #        sequence length apriori.
-        self.outfile.write("%i %i\n%i\n" % (shape[-1], ihdr['gulp_nframe'], maxval))
+        self.outfile.write(b"%i %i\n%i\n" % (shape[-1], ihdr['gulp_nframe'], maxval))
     # **TODO: Need something like on_sequence_end, or a proper SinkBlock class
     def on_data(self, ispan):
         """Process data from from ispans to ospans and return the number of
         frames to commit for each output (or None to commit complete spans)."""
         data = ispan.data
-        print "PgmWriterBlock.on_data()"
+        print("PgmWriterBlock.on_data()")
         # HACK TESTING
         if data.dtype != np.uint8:
             data = (data - data.min()) / (data.max() - data.min()) * 255
@@ -77,7 +79,7 @@ class PgmWriterBlock(bfp.SinkBlock):
             #data = data.astype(np.uint16)
         if self.outfile is None:
             return
-        
+
         data.tofile(self.outfile)
         # HACK TESTING only write the first gulp
         self.outfile.close()
@@ -85,31 +87,34 @@ class PgmWriterBlock(bfp.SinkBlock):
 def write_pgm(iring, *args, **kwargs):
     PgmWriterBlock(iring, *args, **kwargs)
 
-def main():
-    import sys
-    if len(sys.argv) <= 1:
-        print "Usage: example1.py file1.fil [file2.fil ...]"
-        sys.exit(-1)
-    filenames = sys.argv[1:]
-    
-    h_filterbank = read_sigproc(filenames, gulp_nframe=16000, core=0)
+def main(args):
+    h_filterbank = read_sigproc(args.filename, gulp_nframe=16000, core=0)
     h_filterbank = scrunch(h_filterbank, 16, core=0)
     d_filterbank = copy(h_filterbank, space='cuda', gpu=0, core=2)
+    blocks.print_header(d_filterbank)
     with bfp.block_scope(core=2, gpu=0):
         d_filterbankT     = transpose(d_filterbank, ['pol','freq','time'])#[1,2,0])
         d_dispersionbankT = fdmt(d_filterbankT, max_dm=282.52)
-        d_dispersionbank  = transpose(d_dispersionbankT, ['time','pol','dispersion measure'])#[2,0,1])
+        blocks.print_header(d_dispersionbankT)
+        d_dispersionbank  = transpose(d_dispersionbankT, ['time','pol','dispersion'])#[2,0,1])
     h_dispersionbank = copy(d_dispersionbank, space='system', core=3)
     write_pgm(h_dispersionbank, core=3)
-    
+
     pipeline = bfp.get_default_pipeline()
     graph_filename = "example1.dot"
     with open(graph_filename, 'w') as dotfile:
         dotfile.write(str(pipeline.dot_graph()))
-        print "Wrote graph definition to", graph_filename
+        print("Wrote graph definition to", graph_filename)
     pipeline.run()
-    print "All done"
+    print("All done")
 
 if __name__ == '__main__':
-    main()
-
+    parser = argparse.ArgumentParser(
+        description='Read  sigproc filterbank file and apply the Fast Dispersion Measure Transform (FDMT), writing the output to a PGM file',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument('filename', type=str, nargs='+',
+                        help='filterbank file to process')
+    args = parser.parse_args()
+    main(args)
+    

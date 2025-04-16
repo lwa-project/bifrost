@@ -128,6 +128,9 @@ BFstatus bfRingEndWriting(BFring ring);
 BFstatus bfRingWritingEnded(BFring ring, BFbool* writing_ended);
 
 // Sequence write
+// Note: \p name must either be unique among sequences, or be an empty string
+// Note: \p time_tag should either be monotonically increasing with each
+//         sequence, or be BFoffset(-1).
 BFstatus bfRingSequenceBegin(BFwsequence* sequence,
                              BFring       ring,
                              const char*  name,
@@ -164,7 +167,7 @@ BFstatus bfRingSequenceOpenEarliest(BFrsequence* sequence,
 //BFstatus bfRingSequenceOpenNext(BFrsequence* sequence, BFrsequence previous);
 //BFstatus bfRingSequenceNext(BFrsequence* sequence);
 BFstatus bfRingSequenceNext(BFrsequence sequence);
-BFstatus bfRingSequenceOpenSame(BFrsequence* sequence, BFrsequence existing);
+//BFstatus bfRingSequenceOpenSame(BFrsequence* sequence, BFrsequence existing);
 BFstatus bfRingSequenceClose(BFrsequence sequence);
 
 // Sequence common
@@ -175,7 +178,7 @@ BFstatus bfRingSequenceGetHeader(BFsequence sequence, const void** hdr);
 BFstatus bfRingSequenceGetHeaderSize(BFsequence sequence, BFsize* size);
 BFstatus bfRingSequenceGetNRinglet(BFsequence sequence, BFsize* nringlet);
 
-typedef struct {
+typedef struct BFsequence_info_ {
 	BFring      ring;
 	const char* name;
 	BFoffset    time_tag;
@@ -187,10 +190,10 @@ typedef struct {
 BFstatus bfRingSequenceGetInfo(BFsequence sequence, BFsequence_info* sequence_info);
 
 // Write span
-BFstatus bfRingSpanReserve(BFwspan*    span,
-                           //BFwsequence sequence,
-                           BFring      ring,
-                           BFsize      size);
+BFstatus bfRingSpanReserve(BFwspan* span,
+                           BFring   ring,
+                           BFsize   size,
+                           BFbool   nonblocking);
 BFstatus bfRingSpanCommit(BFwspan span,
                           BFsize  size);
 // Read span
@@ -200,10 +203,9 @@ BFstatus bfRingSpanAcquire(BFrspan*    span,
                            BFsize      size);
 BFstatus bfRingSpanRelease(BFrspan span);
 
-//BFstatus bfRingSpanClose(BFrspan span);
-BFstatus bfRingSpanStillValid(BFrspan  span,
-                              BFoffset offset,
-                              BFbool*  valid); // true if span not overwritten beyond offset
+// Returns in *val the number of bytes in the span that have been overwritten
+//   at the time of the call (always zero for guaranteed sequences).
+BFstatus bfRingSpanGetSizeOverwritten(BFrspan span, BFsize* val);
 //BFbool bfRingSpanGood(BFrspan span); // true if span opened successfully
 //BFstatus bfRingSpanGetSequence(BFspan span, BFrsequence* sequence);
 // Any span
@@ -214,7 +216,7 @@ BFstatus bfRingSpanGetStride(BFspan span, BFsize* val);
 BFstatus bfRingSpanGetOffset(BFspan span, BFsize* val);
 BFstatus bfRingSpanGetNRinglet(BFspan span, BFsize* val);
 
-typedef struct {
+typedef struct BFspan_info_ {
 	BFring      ring;
 	void*       data;
 	BFsize      size;

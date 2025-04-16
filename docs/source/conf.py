@@ -52,7 +52,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'bifrost'
-copyright = u'2017, ledatelescope'
+copyright = u'2025, ledatelescope'
 author = u'ledatelescope'
 
 # The version info for the project you're documenting, acts as replacement for

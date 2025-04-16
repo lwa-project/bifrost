@@ -27,6 +27,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <bifrost/config.h>
 #include <bifrost/common.h>
 
 #include <sstream>
@@ -36,6 +37,7 @@ const char* bfGetStatusString(BFstatus status) {
 	switch( status ) {
 		BF_STATUS_STRING_CASE(BF_STATUS_SUCCESS);
 		BF_STATUS_STRING_CASE(BF_STATUS_END_OF_DATA);
+		BF_STATUS_STRING_CASE(BF_STATUS_WOULD_BLOCK);
 		BF_STATUS_STRING_CASE(BF_STATUS_INVALID_POINTER);
 		BF_STATUS_STRING_CASE(BF_STATUS_INVALID_HANDLE);
 		BF_STATUS_STRING_CASE(BF_STATUS_INVALID_ARGUMENT);
@@ -64,17 +66,19 @@ const char* bfGetStatusString(BFstatus status) {
 #undef BF_STATUS_STRING_CASE
 }
 
+static thread_local bool g_debug_enabled = BF_DEBUG_ENABLED;
+
 BFbool bfGetDebugEnabled() {
-#ifdef BF_DEBUG
-	return BF_DEBUG;
+	return g_debug_enabled;
+}
+BFstatus bfSetDebugEnabled(BFbool b) {
+#if !BF_DEBUG_ENABLED
+	return BF_STATUS_INVALID_STATE;
 #else
-	return false;
+	g_debug_enabled = b;
+	return BF_STATUS_SUCCESS;
 #endif
 }
 BFbool bfGetCudaEnabled() {
-#ifdef BF_CUDA_ENABLED
-	return BF_CUDA_ENABLED;
-#else
-	return false;
-#endif
+  return BF_CUDA_ENABLED;
 }

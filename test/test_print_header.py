@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -27,12 +26,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import unittest
-import io
+from io import StringIO
 
 import bifrost.pipeline as bfp
 import bifrost.blocks as blocks
 
-from contextlib2 import redirect_stdout, ExitStack
+try:
+    from contextlib import redirect_stdout, ExitStack
+except ImportError:
+    from contextlib2 import redirect_stdout, ExitStack
 
 class TestPrintHeader(unittest.TestCase):
     """Test all aspects of the print header block"""
@@ -42,7 +44,7 @@ class TestPrintHeader(unittest.TestCase):
         """Capture print output, assert it is a long string"""
         gulp_nframe = 101
 
-        stdout = io.BytesIO()
+        stdout = StringIO()
         with ExitStack() as stack:
             pipeline = stack.enter_context(bfp.Pipeline())
             stack.enter_context(redirect_stdout(stdout))

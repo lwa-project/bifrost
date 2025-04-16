@@ -1,6 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,21 +25,25 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import absolute_import
-
+from bifrost.transpose import transpose as bf_transpose
+from bifrost.memory import space_accessible
 from bifrost.pipeline import TransformBlock
-import bifrost as bf
-import bifrost.transpose
+from bifrost.ring2 import Ring, ReadSequence, ReadSpan, WriteSpan
 
 from copy import deepcopy
 import numpy as np
 
+from typing import Any, Dict, List, Tuple, Union
+
+from bifrost import telemetry
+telemetry.track_module()
+
 class TransposeBlock(TransformBlock):
-    def __init__(self, iring, axes, *args, **kwargs):
+    def __init__(self, iring: Ring, axes: Union[List[int],Tuple[int]], *args, **kwargs):
         super(TransposeBlock, self).__init__(iring, *args, **kwargs)
-        self.axes = axes
+        self.specified_axes = axes
         self.space = self.orings[0].space
-    def on_sequence(self, iseq):
+    def on_sequence(self, iseq: ReadSequence) -> Dict[str,Any]:
         ihdr = iseq.header
         itensor = ihdr['_tensor']
         # TODO: Is this a good idea?
@@ -53,10 +56,14 @@ class TransposeBlock(TransformBlock):
         #        self.axes += [-1] # Make time the fastest dim
         #    else: # Time was not the slowest dim
         #        self.axes = [-1] + self.axes # Make time the slowest dim
-        for d in xrange(len(self.axes)):
-            if isinstance(self.axes[d], basestring):
-                # Look up axis by label
-                self.axes[d] = itensor['labels'].index(self.axes[d])
+        # Allow axes to be specified by label
+        if 'labels' in itensor:
+            labels = itensor['labels']
+            self.axes = [labels.index(ax) if isinstance(ax, str)
+                         else ax
+                         for ax in self.specified_axes]
+        else:
+            self.axes = self.specified_axes
         ohdr = deepcopy(ihdr)
         otensor = ohdr['_tensor']
         # Permute metadata of axes
@@ -65,14 +72,15 @@ class TransposeBlock(TransformBlock):
                 otensor[item] = [itensor[item][axis]
                                  for axis in self.axes]
         return ohdr
-    def on_data(self, ispan, ospan):
+    def on_data(self, ispan: ReadSpan, ospan: WriteSpan) -> None:
         # TODO: bf.memory.transpose should support system space too
-        if bf.memory.space_accessible(self.space, ['cuda']):
-            bf.transpose.transpose(ospan.data, ispan.data, self.axes)
+        if space_accessible(self.space, ['cuda']):
+            bf_transpose(ospan.data, ispan.data, self.axes)
         else:
             ospan.data[...] = np.transpose(ispan.data, self.axes)
 
-def transpose(iring, axes, *args, **kwargs):
+def transpose(iring: Ring, axes: Union[List[int],Tuple[int]],
+              *args, **kwargs) -> TransposeBlock:
     """Transpose (permute) axes of the data.
 
     Args:

@@ -1,5 +1,4 @@
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,6 +29,9 @@ import os, sys
 sys.path.append('..')
 import make_header
 
+from bifrost import telemetry
+telemetry.track_module()
+
 disk_names = [ "ledastorage", "longterm", "offsite", "data" ]
 ledaovro_names = [ "ledaovro1", "ledaovro2", "ledaovro3", "ledaovro4", "ledaovro5", "ledaovro6", "ledaovro7", "ledaovro8", "ledaovro9", "ledaovro10", "ledaovro11","ledaovro12" ]
 data_names = [ "data1", "data2" ]
@@ -44,14 +46,14 @@ def extract_obs_offset_from_name(fname):
   return int(os.path.basename(fname)[20:36])
 
 def extract_obs_offset_in_file(fname):
-  f = open(fname, 'rb')
-  headerstr = f.read(DADA_HEADER_SIZE)
-  f.close()
+  with open(fname, 'rb') as f:
+      headerstr = f.read(DADA_HEADER_SIZE)
+      headerstr = headerstr.decode()
   if len(headerstr) < DADA_HEADER_SIZE: return "UNKNOWN"
   for line in headerstr.split('\n'):
     key, value = line.split()
     if key == "OBS_OFFSET": return int(value)
-  
+
   return "UNKNOWN"
 
 # This does work on leda_dbbeam3 files but the n_scans will be in error
@@ -62,7 +64,7 @@ class FileInfo(object):
     if hedr["TIME_OFFSET"] == "UNKNOWN" or hedr["N_SCANS"] == "UNKNOWN" or hedr["INT_TIME"] == "UNKNOWN" or hedr["LST"] == "UNKNOWN" or hedr["FREQCENT"] == "UNKNOWN": 
       lst = freq = t_offset = n_scans = int_time = utc_date = utc_time = 0
     else:
-      t_offset = int(hedr["TIME_OFFSET"])	
+      t_offset = int(hedr["TIME_OFFSET"])    
       n_scans = int(hedr["N_SCANS"])
       int_time = int(hedr["INT_TIME"])
       lst = float(hedr["LST"])
@@ -84,12 +86,12 @@ class FileInfo(object):
     obs1 = extract_obs_offset_from_name(fname)
     obs2 = extract_obs_offset_in_file(fname)
     if obs1 != obs2 and obs1 != "UNKNOWN" and obs2 !="UNKNOWN":
-      print "Consistency Error", fname, ": OBS_OFFSET in file doesn't match the offset in the name"
+      print("Consistency Error", fname, ": OBS_OFFSET in file doesn't match the offset in the name")
     """
 
     if hedr["SOURCE"] == "LEDA_TEST":
-      if not is_integer(n_scans): print "CONSISTENCY ERROR, ", fname, "scan:",n_scans, "is not integer"
-      if not is_integer((self.end_time-self.start_time)/9.0): print "CONSISTENCY ERROR", fname, ": not 9 sec dump in file"
+      if not is_integer(n_scans): print("CONSISTENCY ERROR, ", fname, "scan:",n_scans, "is not integer")
+      if not is_integer((self.end_time-self.start_time)/9.0): print("CONSISTENCY ERROR", fname, ": not 9 sec dump in file")
 
 # Gather the file info for all files that have different frequency but the same observation time.
 class BandFiles(object):
@@ -107,7 +109,7 @@ class BandFiles(object):
     if basename[-5:] == ".dada":                # Just a single file
       if os.access(basename,os.R_OK): self.files.append(FileInfo(basename))
       else: "Error:", basename, "does not exist or is not readable"
-      print basename, FileInfo(basename), self.files
+      print(basename, FileInfo(basename), self.files)
     else:
 
       # Look for files in all the standard locations
@@ -139,9 +141,9 @@ class BandFiles(object):
       if f.start_time not in self.start_time_present: self.start_time_present.append(f.start_time)
 
     if len(self.start_time_present) > 1:
-      print "Error: Files with same timestamp in their name have different internal time. Basename:",basename
+      print("Error: Files with same timestamp in their name have different internal time. Basename:",basename)
       #sys.exit(1)
-    
+
     self.start_time = self.start_time_present[0]
     self.end_time = self.files[0].end_time
     self.lst = self.files[0].lst
@@ -161,7 +163,7 @@ class BandFiles(object):
     for f in self.files:
       if self.find_close_frequency(f.freq): num_present += 1
 
-    if num_present == 0:	# Trying adjusting
+    if num_present == 0:    # Trying adjusting
       for f in self.files:
         if self.find_close_frequency(f.freq+5.244-0.012): num_present += 1
       if num_present > 0:
@@ -175,7 +177,7 @@ class BandFiles(object):
             self.frequency_adjusted2 = True
           for f in self.files: 
             f.freq -= 0.012
-   
+
     return (num_present == 22)
 
   def report(self):
@@ -196,4 +198,3 @@ class BandFiles(object):
     for f in self.files:
       if f.freq in frequencies: has.append(f.freq)
     return has
-

@@ -1,5 +1,4 @@
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2016-2021, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -42,11 +41,11 @@ class ModResizeAsciiBlock(SinkBlock):
         open(self.filename, "w").close()
     def load_settings(self, input_header):
         """Load the header, and set the gulp appropriately"""
-        header_dict = json.loads(input_header.tostring())
+        header_dict = json.loads(input_header.tobytes())
         self.shape = header_dict['shape']
         size_of_float32 = 4
         if self.gulp_size is None:
-            self.gulp_size = np.product(self.shape)*size_of_float32
+            self.gulp_size = np.prod(self.shape) * size_of_float32
     def iterate_ring_read(self, input_ring):
         """Iterate through one input ring
         @param[in] input_ring Ring to read through"""
@@ -59,15 +58,16 @@ class ModResizeAsciiBlock(SinkBlock):
         """Initiate the writing to file
         @param[in] input_rings First ring in this list will be used"""
         span_generator = self.iterate_ring_read(input_ring)
-        span = span_generator.next()
+        span = next(span_generator)
         text_file = open(self.filename, 'a')
         np.savetxt(text_file, span.data_view(np.float32).reshape((1,-1)))
+        text_file.close()
 
 class TestLateResize(unittest.TestCase):
     """Test late resizing of a ring in a pipeline"""
     def test_modified_write_ascii(self):
         """Using a modified WriteAciiBlock, test the late resize.
-        This should fail if ModWriteAscii block does not read the 
+        This should fail if ModWriteAscii block does not read the
         size of the input ring ahead of time, and resize accordingly."""
         blocks = []
         blocks.append((TestingBlock([1, 2, 3]), [], [0]))

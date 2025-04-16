@@ -1,5 +1,5 @@
 
-# Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 # Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,11 +26,14 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from libbifrost import _bf, _check, _get, _retval
+from bifrost.libbifrost import _bf, _th
 
-def status_string(status):
-	return _retval(_bf.GetStatusString(status))
-def debug_enabled():
-	return bool(_retval(_bf.GetDebugEnabled()))
-def cuda_enabled():
-	return bool(_retval(_bf.GetCudaEnabled()))
+from bifrost import telemetry
+telemetry.track_module()
+
+def status_string(status: _th.BFstatus_enum) -> str:
+    return _bf.bfGetStatusString(status.value)
+def debug_enabled() -> bool:
+    return bool(_bf.bfGetDebugEnabled())
+def cuda_enabled() -> bool:
+    return bool(_bf.bfGetCudaEnabled())
