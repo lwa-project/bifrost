@@ -133,7 +133,7 @@ ifeq ($(HAVE_DOCKER),1)
 endif
 .PHONY: docker
 
-# CPU-only Docker build
+# Bifrost-less CPU-only Docker build
 docker-base-cpu:
 ifeq ($(HAVE_DOCKER),1)
 	docker build --pull \

@@ -156,12 +156,12 @@ Build Docker image:
 
 Launch container:
 
-    $ nvidia-docker run --rm -it ledatelescope/bifrost
+    $ docker run --runtime=nvidia --rm -it ledatelescope/bifrost:latest
 
 For CPU-only builds:
 
     $ make docker-cpu
-    $ docker run --rm -it ledatelescope/bifrost
+    $ docker run --rm -it ledatelescope/bifrost-cpu:latest
 
 ### Running Tests
 
