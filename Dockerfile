@@ -29,11 +29,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
         python3-pip \
         python-is-python3 \
+        python3-venv \
         pylint \
         universal-ctags \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Set up a Python virtual environment to avoid externally-managed-environment
+# errors on newer versions of Python
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # Documentation dependencies (only installed if BUILD_DOCS=1)
 RUN if [ "${BUILD_DOCS}" = "1" ]; then \
