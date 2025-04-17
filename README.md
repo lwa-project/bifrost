@@ -163,6 +163,12 @@ For CPU-only builds:
     $ make docker-cpu
     $ docker run --rm -it ledatelescope/bifrost-cpu:latest
 
+You can also build containers that target a particular version of Ubuntu or CUDA
+using the `DOCKER_UBUNTU_VERSION` and `DOCKER_CUDA_VERSION` environment variables,
+respectively.  For example, to build a container using Ubuntu 24.04 and CUDA 12.8.1:
+
+    $ DOCKER_UBUNTU_VERSION=24.04 DOCKER_CUDA_VERSION=12.8.1 make docker
+
 ### Running Tests
 
 To run all CPU and GPU tests:
