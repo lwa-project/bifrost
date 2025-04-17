@@ -113,7 +113,8 @@ RUN make clean && \
     if [ "${BUILD_DOCS}" = "1" ]; then \
         make doc; \
     fi && \
-    make install
+    make install && \
+    make clean
 
 ENV LD_LIBRARY_PATH /usr/local/lib:${LD_LIBRARY_PATH}
 
