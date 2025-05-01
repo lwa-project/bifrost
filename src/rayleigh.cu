@@ -27,6 +27,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <bifrost/config.h>
 #include <bifrost/rayleigh.h>
 #include "assert.hpp"
 #include "utils.hpp"
@@ -55,49 +56,23 @@ using std::endl;
 // cuRAND API errors - from 
 static const char *curandGetErrorString(curandStatus_t error)
 {
-    switch (error)
-    {
-        case CURAND_STATUS_SUCCESS:
-            return "CURAND_STATUS_SUCCESS";
-
-        case CURAND_STATUS_VERSION_MISMATCH:
-            return "CURAND_STATUS_VERSION_MISMATCH";
-
-        case CURAND_STATUS_NOT_INITIALIZED:
-            return "CURAND_STATUS_NOT_INITIALIZED";
-
-        case CURAND_STATUS_ALLOCATION_FAILED:
-            return "CURAND_STATUS_ALLOCATION_FAILED";
-
-        case CURAND_STATUS_TYPE_ERROR:
-            return "CURAND_STATUS_TYPE_ERROR";
-
-        case CURAND_STATUS_OUT_OF_RANGE:
-            return "CURAND_STATUS_OUT_OF_RANGE";
-
-        case CURAND_STATUS_LENGTH_NOT_MULTIPLE:
-            return "CURAND_STATUS_LENGTH_NOT_MULTIPLE";
-
-        case CURAND_STATUS_DOUBLE_PRECISION_REQUIRED:
-            return "CURAND_STATUS_DOUBLE_PRECISION_REQUIRED";
-
-        case CURAND_STATUS_LAUNCH_FAILURE:
-            return "CURAND_STATUS_LAUNCH_FAILURE";
-
-        case CURAND_STATUS_PREEXISTING_FAILURE:
-            return "CURAND_STATUS_PREEXISTING_FAILURE";
-
-        case CURAND_STATUS_INITIALIZATION_FAILED:
-            return "CURAND_STATUS_INITIALIZATION_FAILED";
-
-        case CURAND_STATUS_ARCH_MISMATCH:
-            return "CURAND_STATUS_ARCH_MISMATCH";
-
-        case CURAND_STATUS_INTERNAL_ERROR:
-            return "CURAND_STATUS_INTERNAL_ERROR";
-    }
-
-    return "<unknown>";
+	switch (error)
+	{
+		case CURAND_STATUS_SUCCESS:             return "CURAND_STATUS_SUCCESS";
+		case CURAND_STATUS_VERSION_MISMATCH:    return "CURAND_STATUS_VERSION_MISMATCH";
+		case CURAND_STATUS_NOT_INITIALIZED:     return "CURAND_STATUS_NOT_INITIALIZED";
+		case CURAND_STATUS_ALLOCATION_FAILED:   return "CURAND_STATUS_ALLOCATION_FAILED";
+		case CURAND_STATUS_TYPE_ERROR:          return "CURAND_STATUS_TYPE_ERROR";
+		case CURAND_STATUS_OUT_OF_RANGE:        return "CURAND_STATUS_OUT_OF_RANGE";
+		case CURAND_STATUS_LENGTH_NOT_MULTIPLE: return "CURAND_STATUS_LENGTH_NOT_MULTIPLE";
+		case CURAND_STATUS_DOUBLE_PRECISION_REQUIRED: return "CURAND_STATUS_DOUBLE_PRECISION_REQUIRED";
+		case CURAND_STATUS_LAUNCH_FAILURE:        return "CURAND_STATUS_LAUNCH_FAILURE";
+		case CURAND_STATUS_PREEXISTING_FAILURE:   return "CURAND_STATUS_PREEXISTING_FAILURE";
+		case CURAND_STATUS_INITIALIZATION_FAILED: return "CURAND_STATUS_INITIALIZATION_FAILED";
+		case CURAND_STATUS_ARCH_MISMATCH:  return "CURAND_STATUS_ARCH_MISMATCH";
+		case CURAND_STATUS_INTERNAL_ERROR: return "CURAND_STATUS_INTERNAL_ERROR";
+		default: return "<unknown>";
+	}
 }
 
 #define BF_CHECK_CURAND_EXCEPTION(call, err) \
@@ -122,100 +97,110 @@ static const char *curandGetErrorString(curandStatus_t error)
 #define CUDART_SQRT_4_OVER_PI_MINUS_ONE_F 0.522723201f
 
 struct __attribute__((aligned(1))) nibble2 {
-    // Yikes!  This is dicey since the packing order is implementation dependent!  
-    signed char y:4, x:4;
+	// Yikes!  This is dicey since the packing order is implementation dependent!  
+	signed char y:4, x:4;
 };
 
 struct __attribute__((aligned(1))) blenib2 {
-    // Yikes!  This is dicey since the packing order is implementation dependent!
-    signed char x:4, y:4;
+	// Yikes!  This is dicey since the packing order is implementation dependent!
+	signed char x:4, y:4;
 };
 
 template<typename InType>
 __global__ void flagger_kernel(unsigned int               ntime,
-                               unsigned int               nantpol,
-                               float                      alpha,
-                               unsigned int               clip_sigmas,
-                               float                      max_flag_frac,
-                               unsigned int               is_first,
-                               float*                     state,
-                               const float* __restrict__  pool,
-                               unsigned int*              flags,
-                               const InType* __restrict__ d_in,
-                               InType* __restrict__       d_out) {
+	                           unsigned int               nantpol,
+	                           float                      alpha,
+	                           unsigned int               clip_sigmas,
+	                           float                      max_flag_frac,
+	                           unsigned int               is_first,
+	                           float*                     state,
+	                           const float* __restrict__  pool,
+	                           unsigned int*              pool_pos,
+	                           unsigned int*              flags,
+	                           const InType* __restrict__ d_in,
+	                           InType* __restrict__       d_out) {
 	int a = threadIdx.x + blockIdx.x*blockDim.x;
 	
-  int r = a;
-  if( r > BF_POOL_SIZE ) r %= BF_POOL_SIZE;
-  
-	int t, count, bad_count;
-  float power, mean;
+	int t, t, count, bad_count;
+	float power, mean;
 	if( a < nantpol ) {
-    mean = 0.0;
-    count = bad_count = 0;
-    
-    InType temp;
-    
-		for(t=0; t<ntime; t++) {
-      temp = d_in[t*nantpol + a];
-      power  = temp.x*temp.x + temp.y*temp.y;
-      
-      if( power >= (clip_sigmas*CUDART_SQRT_4_OVER_PI_MINUS_ONE_F*state[a]) && is_first == 0 ) {
-        temp.x = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
-        if( r > BF_POOL_SIZE ) r = 0;
-        temp.y = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
-        if( r > BF_POOL_SIZE ) r = 0;
-				
-        bad_count++;
-      } else {
-        mean += power;
-	      count++;
-			}
-      d_out[t*nantpol + a] = temp;
+		r = *(pool_pos + a);
+		if( r > BF_POOL_SIZE ) {
+			r %= BF_POOL_SIZE;
 		}
-    
-    mean /= count;
-    if( bad_count < (count*max_flag_frac)) {
-      state[a] = alpha*mean + (1-alpha)*state[a];
-    } else {
-      atomicAdd(flags, 1);
-    }
+		
+		mean = 0.0;
+		count = bad_count = 0;
+		
+		InType temp;
+		for(t=0; t<ntime; t++) {
+			temp = d_in[t*nantpol + a];
+			power  = temp.x*temp.x + temp.y*temp.y;
+			
+			if( power >= (clip_sigmas*CUDART_SQRT_4_OVER_PI_MINUS_ONE_F*state[a]) && is_first == 0 ) {
+				temp.x = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
+				if( r > BF_POOL_SIZE ) {
+					r = 0;
+				}
+				temp.y = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
+				if( r > BF_POOL_SIZE ) {
+					r = 0;
+				}
+				
+				bad_count++;
+			} else {
+				mean += power;
+				count++;
+			}
+			
+			d_out[t*nantpol + a] = temp;
+		}
+		
+		mean /= count;
+		if( bad_count < (count*max_flag_frac)) {
+			state[a] = alpha*mean + (1-alpha)*state[a];
+		} else {
+			atomicAdd(flags, 1);
+		}
+		
+		*(pool_pos + a) = r;
 	}
 }
 
 template<typename InType>
 inline void launch_flagger_kernel(unsigned int  ntime, 
-                                  unsigned int  nantpol,
-                                  float         alpha,
-                                  unsigned int  clip_sigmas,
-                                  float         max_flag_frac,
-                                  unsigned int  is_first,
-                                  float*        state,
-                                  float*        pool,
-                                  BFsize*       flags,
-                                  InType*       d_in,
-                                  InType*       d_out,
-                                  cudaStream_t  stream=0) {
+	                              unsigned int  nantpol,
+	                              float         alpha,
+	                              unsigned int  clip_sigmas,
+	                              float         max_flag_frac,
+	                              unsigned int  is_first,
+	                              float*        state,
+	                              float*        pool,
+	                              BFsize*       flags,
+	                              InType*       d_in,
+	                              InType*       d_out,
+	                              cudaStream_t  stream=0) {
 	//cout << "LAUNCH for " << nelement << endl;
 	dim3 block(std::min(256u, nantpol), 1);
 	int first = std::min((nantpol-1)/block.x+1, 65535u);
 	dim3 grid(first, 1u, 1u);
-
-  /*
+	
+	/*
 	cout << "  Block size is " << block.x << " by " << block.y << endl;
 	cout << "  Grid  size is " << grid.x << " by " << grid.y << " by " << grid.z << endl;
 	cout << "  Maximum size is " << block.y*grid.y*grid.z << endl;
 	*/
-				 					 
+	
 	void* args[] = {&ntime, 
 	                &nantpol,
 	                &alpha,
-                  &clip_sigmas,
+	                &clip_sigmas,
 	                &max_flag_frac,
 	                &is_first,
 	                &state,
-                  &pool,
-                  &flags,
+	                &pool,
+	                &pool_pos,
+	                &flags,
 	                &d_in,
 	                &d_out};
 	BF_CHECK_CUDA_EXCEPTION(cudaLaunchKernel((void*)flagger_kernel<InType>,
@@ -232,12 +217,13 @@ public: // HACK WAR for what looks like a bug in the CUDA 7.0 compiler
 	typedef float  DType;
 private:
 	UType     _nantpol;
-  float     _alpha;
-  UType     _clip_sigmas;
-  float     _max_flag_frac;
+	float     _alpha;
+	UType     _clip_sigmas;
+	float     _max_flag_frac;
 	UType     _first;
-  float*    _state = NULL;
-  float*    _pool = NULL;
+	float*    _state = NULL;
+	float*    _pool = NULL;
+	UType*    _pool_pos = NULL;
 	BFsize*   _flags = NULL;
 	IType     _plan_stride;
 	Workspace _plan_storage;
@@ -248,14 +234,14 @@ public:
 	BFrayleigh_impl() : _first(1), _stream(g_cuda_stream) {}
 	inline UType nantpol()  const { return _nantpol; }
 	void init(UType nantpol, 
-            float alpha,
-	          UType clip_sigmas,
-            float max_flag_frac) {
+			  float alpha,
+			  UType clip_sigmas,
+			  float max_flag_frac) {
 		BF_TRACE();
 		_nantpol       = nantpol;
-    _alpha         = alpha;
-    _clip_sigmas   = clip_sigmas;
-    _max_flag_frac = max_flag_frac;
+		_alpha         = alpha;
+		_clip_sigmas   = clip_sigmas;
+		_max_flag_frac = max_flag_frac;
 		
 		_state = NULL;
 	}
@@ -269,7 +255,8 @@ public:
 		Workspace workspace(ALIGNMENT_BYTES);
 		_plan_stride = round_up(_nantpol, ALIGNMENT_ELMTS);
 		workspace.reserve(_nantpol+1, &_state);
-    workspace.reserve(BF_POOL_SIZE+1, &_pool);
+		workspace.reserve(BF_POOL_SIZE+1, &_pool);
+		worksapce.reserve(_nantpol+1, &_pool_pos);
 		workspace.reserve(1, &_flags);
 		
 		if( storage_size ) {
@@ -293,8 +280,9 @@ public:
 		return true;
 	}
 	void reset_state() {
-		BF_ASSERT_EXCEPTION(_state != NULL,  BF_STATUS_INVALID_STATE);
-		BF_ASSERT_EXCEPTION(_pool != NULL,   BF_STATUS_INVALID_STATE);
+		BF_ASSERT_EXCEPTION(_state != NULL,    BF_STATUS_INVALID_STATE);
+		BF_ASSERT_EXCEPTION(_pool != NULL,     BF_STATUS_INVALID_STATE);
+		BF_ASSERT_EXCEPTION(_pool_pos != NULL, BF_STATUS_INVALID_STATE);
 		
 		BF_CHECK_CUDA_EXCEPTION(cudaGetLastError(), BF_STATUS_INTERNAL_ERROR);
 		
@@ -309,14 +297,21 @@ public:
  		
  		BF_CHECK_CUDA_EXCEPTION(cudaGetLastError(), BF_STATUS_INTERNAL_ERROR);
 		
-    curandGenerator_t gen;
-    BF_CHECK_CURAND_EXCEPTION(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT),
-                              BF_STATUS_DEVICE_ERROR);
-    BF_CHECK_CURAND_EXCEPTION(curandSetPseudoRandomGeneratorSeed(gen, 102114111115116ULL),
-                              BF_STATUS_DEVICE_ERROR);
-    BF_CHECK_CURAND_EXCEPTION(curandGenerateNormal(gen, _pool, BF_POOL_SIZE, 0.0, 1.0),
-                              BF_STATUS_DEVICE_ERROR);
-    BF_CHECK_CURAND_EXCEPTION(curandDestroyGenerator(gen), BF_STATUS_DEVICE_ERROR);
+		curandGenerator_t gen;
+		BF_CHECK_CURAND_EXCEPTION(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT),
+		                          BF_STATUS_DEVICE_ERROR);
+		BF_CHECK_CURAND_EXCEPTION(curandSetPseudoRandomGeneratorSeed(gen, 102114111115116ULL),
+                                  BF_STATUS_DEVICE_ERROR);
+		BF_CHECK_CURAND_EXCEPTION(curandGenerateNormal(gen, _pool, BF_POOL_SIZE, 0.0, 1.0),
+                                  BF_STATUS_DEVICE_ERROR);
+		BF_CHECK_CURAND_EXCEPTION(curandDestroyGenerator(gen), BF_STATUS_DEVICE_ERROR);
+		
+
+		BF_CHECK_CUDA_EXCEPTION( cudaMemsetAsync(_pool_pos,
+		                                         0,
+		                                         sizeof(UType)*_nantpol,
+		                                         _stream),
+		                         BF_STATUS_MEM_OP_FAILED );
 		
 		BF_CHECK_CUDA_EXCEPTION( cudaStreamSynchronize(_stream),
 		                         BF_STATUS_DEVICE_ERROR );
@@ -326,7 +321,7 @@ public:
 	}
 	void execute(BFarray const* in,
 	             BFarray const* out,
-               BFsize*        flags) {
+	             BFsize*        flags) {
 		BF_TRACE();
 		BF_TRACE_STREAM(_stream);
 		BF_ASSERT_EXCEPTION(_state != NULL, BF_STATUS_INVALID_STATE);
@@ -337,13 +332,13 @@ public:
 #define LAUNCH_FLAGGER_KERNEL(IterType) \
     cudaMemsetAsync(_flags, 0, sizeof(BFsize), _stream); \
 		launch_flagger_kernel(in->shape[0], _nantpol, \
-                          _alpha, _clip_sigmas, _max_flag_frac, \
-		                      _first, _state, _pool, _flags, \
+		                      _alpha, _clip_sigmas, _max_flag_frac, \
+		                      _first, _state, _pool, _pool_pos, _flags, \
 		                      (IterType)in->data, (IterType)out->data, \
 		                      _stream); \
 		cudaMemcpyAsync(flags, _flags, sizeof(BFsize), cudaMemcpyDeviceToHost, _stream);
 		
-    *flags = 0;
+		*flags = 0;
 		switch( in->dtype ) {
 			case BF_DTYPE_CI4:
 				if( in->big_endian ) {
@@ -387,8 +382,8 @@ BFstatus bfRayleighInit(BFrayleigh plan,
 	BF_ASSERT(plan, BF_STATUS_INVALID_HANDLE);
 	BF_ASSERT(space_accessible_from(space, BF_SPACE_CUDA),
 	          BF_STATUS_UNSUPPORTED_SPACE);
-  
-  BF_ASSERT((alpha > 0) && (alpha <= 1), BF_STATUS_INVALID_ARGUMENT);
+	
+	BF_ASSERT((alpha > 0) && (alpha <= 1), BF_STATUS_INVALID_ARGUMENT);
 	
 	BF_TRY(plan->init(nantpols, alpha, clip_sigmas, max_flag_frac));
 	BF_TRY_RETURN(plan->init_plan_storage(plan_storage, plan_storage_size));
