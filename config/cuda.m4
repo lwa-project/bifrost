@@ -151,7 +151,7 @@ AC_DEFUN([AX_CHECK_CUDA],
     CXXFLAGS="$CXXFLAGS -DBF_CUDA_ENABLED=1"
     NVCCFLAGS="$NVCCFLAGS -DBF_CUDA_ENABLED=1"
     LDFLAGS="$LDFLAGS -L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
-    NVCCLIBS="$NVCCLIBS -lcuda -lcudart -lnvrtc -lcublas -lcudadevrt -L. -lcufft_static_pruned -lculibos -lnvToolsExt"
+    NVCCLIBS="$NVCCLIBS -lcuda -lcudart -lnvrtc -lcublas -lcurand -lcudadevrt -L. -lcufft_static_pruned -lculibos -lnvToolsExt"
   fi
   
   AC_ARG_WITH([gpu_archs],
