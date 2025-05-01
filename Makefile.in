@@ -7,7 +7,18 @@ DAT_DIR = share
 SRC_DIR = src
 
 HAVE_PYTHON = @HAVE_PYTHON@
+
 HAVE_DOCKER = @HAVE_DOCKER@
+DOCKER_REGISTRY ?= ledatelescope
+DOCKER_IMAGE_NAME ?= bifrost
+DOCKER_TAG ?= $(LIBBIFROST_MAJOR).$(LIBBIFROST_MINOR)
+DOCKER_CUDA_VERSION ?= 12.6.3
+DOCKER_UBUNTU_VERSION ?= 22.04
+DOCKER_GPU_ARCHS ?=
+DOCKER_BUILD_DOCS ?= 0
+
+CAN_BUILD_CXX_DOCS = @HAVE_CXX_DOCS@
+CAN_BUILD_PYTHON_DOCS = @HAVE_PYTHON_DOCS@
 
 BIFROST_PYTHON_DIR = python
 
@@ -18,10 +29,23 @@ libbifrost:
 	$(MAKE) -C $(SRC_DIR) all
 .PHONY: libbifrost
 
+check:
+ifeq ($(HAVE_PYTHON),1)
+	MYPYPATH=$(BIFROST_PYTHON_DIR) mypy --follow-imports=silent \
+	    python/bifrost/blocks/detect.py \
+	    python/bifrost/blocks/quantize.py \
+	    python/bifrost/blocks/unpack.py \
+	    python/bifrost/sigproc.py \
+	    python/bifrost/sigproc2.py \
+	    test/test_sigproc.py \
+	    testbench/test_fft_detect.py
+endif
+.PHONY: check
+
 test:
 	#$(MAKE) -C $(SRC_DIR) test
 ifeq ($(HAVE_PYTHON),1)
-	cd test && ./download_test_data.sh ; python -m unittest discover
+	cd test && ./download_test_data.sh ; @PYTHON@ -m unittest discover -v
 endif
 .PHONY: test
 clean:
@@ -63,8 +87,13 @@ ifeq ($(HAVE_PYTHON),1)
 endif
 .PHONY: uninstall
 
-doc: $(INC_DIR)/bifrost/*.h Doxyfile
+doc: $(INC_DIR)/bifrost/*.h Doxyfile docs/source/*.rst docs/source/*.py
+ifeq ($(CAN_BUILD_CXX_DOCS),1)
 	@DX_DOXYGEN@ Doxyfile
+endif
+ifeq ($(CAN_BUILD_PYTHON_DOCS),1)
+	$(MAKE) -C docs singlehtml
+endif
 .PHONY: doc
 
 python: libbifrost
@@ -73,30 +102,63 @@ ifeq ($(HAVE_PYTHON),1)
 endif
 .PHONY: python
 
-#GPU Docker build
-IMAGE_NAME ?= ledatelescope/bifrost
+# Bifrost-less GPU Docker build
+docker-base:
+ifeq ($(HAVE_DOCKER),1)
+	docker build --pull \
+		--build-arg CUDA_VERSION=$(DOCKER_CUDA_VERSION) \
+		--build-arg UBUNTU_VERSION=$(DOCKER_UBUNTU_VERSION) \
+		--build-arg BUILD_TYPE=gpu \
+		--build-arg GPU_ARCHS="$(DOCKER_GPU_ARCHS)" \
+		--build-arg BUILD_DOCS=$(DOCKER_BUILD_DOCS) \
+		--target=base \
+		-f Dockerfile \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-base:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-base:latest .
+endif
+.PHONY: docker-base
+
+# GPU Docker build
 docker:
 ifeq ($(HAVE_DOCKER),1)
-	docker build --pull -t $(IMAGE_NAME):$(LIBBIFROST_MAJOR).$(LIBBIFROST_MINOR) -f Dockerfile.gpu -t $(IMAGE_NAME) .
+	docker build --pull \
+		--build-arg CUDA_VERSION=$(DOCKER_CUDA_VERSION) \
+		--build-arg UBUNTU_VERSION=$(DOCKER_UBUNTU_VERSION) \
+		--build-arg BUILD_TYPE=gpu \
+		--build-arg GPU_ARCHS="$(DOCKER_GPU_ARCHS)" \
+		--build-arg BUILD_DOCS=0 \
+		-f Dockerfile \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):latest .
 endif
 .PHONY: docker
 
-#GPU Docker prereq build
-# (To be used for testing new builds rapidly)
-IMAGE_NAME ?= ledatelescope/bifrost
-docker_prereq:
+# Bifrost-less CPU-only Docker build
+docker-base-cpu:
 ifeq ($(HAVE_DOCKER),1)
-	docker build --pull -t $(IMAGE_NAME)_prereq:$(LIBBIFROST_MAJOR).$(LIBBIFROST_MINOR) -f Dockerfile_prereq.gpu -t $(IMAGE_NAME)_prereq .
+	docker build --pull \
+		--build-arg UBUNTU_VERSION=$(DOCKER_UBUNTU_VERSION) \
+		--build-arg BUILD_TYPE=cpu \
+		--build-arg BUILD_DOCS=$(DOCKER_BUILD_DOCS) \
+		--target=base \
+		-f Dockerfile \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-base-cpu:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-base-cpu:latest .
 endif
-.PHONY: docker_prereq
+.PHONY: docker-base-cpu
 
-#CPU-only Docker build
-IMAGE_NAME ?= ledatelescope/bifrost
+# CPU-only Docker build
 docker-cpu:
 ifeq ($(HAVE_DOCKER),1)
-	docker build --pull -t $(IMAGE_NAME):$(LIBBIFROST_MAJOR).$(LIBBIFROST_MINOR) -f Dockerfile.cpu -t $(IMAGE_NAME) .
+	docker build --pull \
+		--build-arg UBUNTU_VERSION=$(DOCKER_UBUNTU_VERSION) \
+		--build-arg BUILD_TYPE=cpu \
+		--build-arg BUILD_DOCS=$(DOCKER_BUILD_DOCS) \
+		-f Dockerfile \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-cpu:$(DOCKER_TAG) \
+		-t $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME)-cpu:latest .
 endif
-.PHONY: docker
+.PHONY: docker-cpu
 
 # TODO: Consider adding a mode 'develop=1' that makes symlinks instead of copying
 #         the library and headers.
