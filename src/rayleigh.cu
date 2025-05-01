@@ -51,7 +51,7 @@
 using std::cout;
 using std::endl;
 
-#define BF_POOL_SIZE 268435456
+#define BF_POOL_SIZE 33554432
 
 // cuRAND API errors - from 
 static const char *curandGetErrorString(curandStatus_t error)
@@ -121,14 +121,15 @@ __global__ void flagger_kernel(unsigned int               ntime,
 	                           InType* __restrict__       d_out) {
 	int a = threadIdx.x + blockIdx.x*blockDim.x;
 	
-	int t, t, count, bad_count;
-	float power, mean;
+	int r, t, count, bad_count;
+	float lstate, power, mean;
 	if( a < nantpol ) {
 		r = *(pool_pos + a);
 		if( r > BF_POOL_SIZE ) {
 			r %= BF_POOL_SIZE;
 		}
 		
+		lstate = state[a];
 		mean = 0.0;
 		count = bad_count = 0;
 		
@@ -137,12 +138,13 @@ __global__ void flagger_kernel(unsigned int               ntime,
 			temp = d_in[t*nantpol + a];
 			power  = temp.x*temp.x + temp.y*temp.y;
 			
-			if( power >= (clip_sigmas*CUDART_SQRT_4_OVER_PI_MINUS_ONE_F*state[a]) && is_first == 0 ) {
-				temp.x = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
+			if( (power >= (clip_sigmas*CUDART_SQRT_4_OVER_PI_MINUS_ONE_F*lstate)) \
+				&& (is_first == 0) ) {
+				temp.x = pool[r++] * CUDART_SQRT_2_OVER_PI_F*lstate;
 				if( r > BF_POOL_SIZE ) {
 					r = 0;
 				}
-				temp.y = pool[r++] * CUDART_SQRT_2_OVER_PI_F*state[a];
+				temp.y = pool[r++] * CUDART_SQRT_2_OVER_PI_F*lstate;
 				if( r > BF_POOL_SIZE ) {
 					r = 0;
 				}
@@ -156,11 +158,13 @@ __global__ void flagger_kernel(unsigned int               ntime,
 			d_out[t*nantpol + a] = temp;
 		}
 		
-		mean /= count;
-		if( bad_count < (count*max_flag_frac)) {
-			state[a] = alpha*mean + (1-alpha)*state[a];
-		} else {
-			atomicAdd(flags, 1);
+		if( count > 0 ) {
+			mean /= count;
+			if( bad_count < (count*max_flag_frac)) {
+				state[a] = alpha*mean + (1-alpha)*lstate;
+			} else {
+				atomicAdd(flags, 1);
+			}
 		}
 		
 		*(pool_pos + a) = r;
@@ -176,6 +180,7 @@ inline void launch_flagger_kernel(unsigned int  ntime,
 	                              unsigned int  is_first,
 	                              float*        state,
 	                              float*        pool,
+	                              unsigned int* pool_pos,
 	                              BFsize*       flags,
 	                              InType*       d_in,
 	                              InType*       d_out,
@@ -256,7 +261,7 @@ public:
 		_plan_stride = round_up(_nantpol, ALIGNMENT_ELMTS);
 		workspace.reserve(_nantpol+1, &_state);
 		workspace.reserve(BF_POOL_SIZE+1, &_pool);
-		worksapce.reserve(_nantpol+1, &_pool_pos);
+		workspace.reserve(_nantpol+1, &_pool_pos);
 		workspace.reserve(1, &_flags);
 		
 		if( storage_size ) {
