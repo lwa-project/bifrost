@@ -22398,16 +22398,16 @@ fi
 
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for header-only NVTX version" >&5
 printf %s "checking for header-only NVTX version... " >&6; }
-      CXXFLAGS_save="$CXXFLAGS"
-      LDFLAGS_save="$LDFLAGS"
-      NVCCLIBS_save="$NVCCLIBS"
-      ac_ext_save="$ac_ext"
+    CXXFLAGS_save="$CXXFLAGS"
+    LDFLAGS_save="$LDFLAGS"
+    NVCCLIBS_save="$NVCCLIBS"
+    ac_ext_save="$ac_ext"
 
-      LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
-      NVCCLIBS="-lcuda -lcudart -lnvToolsExt"
-      ac_ext="cu"
-      ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
-      if test "$cross_compiling" = yes
+    LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
+    NVCCLIBS="-lcuda -lcudart -lnvToolsExt"
+    ac_ext="cu"
+    ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
+    if test "$cross_compiling" = yes
 then :
   { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
 printf "%s\n" "$as_me: error: in '$ac_pwd':" >&2;}
@@ -22418,9 +22418,9 @@ else case e in #(
 /* end confdefs.h.  */
 
 
-            #include <cuda.h>
-            #include <cuda_runtime.h>
-            #include <thrust/system/cuda/memory.h>
+          #include <cuda.h>
+          #include <cuda_runtime.h>
+          #include <thrust/system/cuda/memory.h>
 int
 main (void)
 {
@@ -22431,15 +22431,16 @@ main (void)
 _ACEOF
 if ac_fn_cxx_try_run "$LINENO"
 then :
-  GPU_HEADERONLY_NVTX=1
+  GPU_HEADERONLY_NVTX=0
 
-             { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
+           NVCCLIBS_save="$NVCCLIBS_save -lnvToolsExt"
+           { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
 else case e in #(
-  e) GPU_HEADERONLY_NVTX=0
+  e) GPU_HEADERONLY_NVTX=1
 
-             { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; } ;;
+           { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; } ;;
 esac
 fi
 rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
@@ -22448,10 +22449,10 @@ esac
 fi
 
 
-      CXXFLAGS="$CXXFLAGS_save"
-      LDFLAGS="$LDFLAGS_save"
-      NVCCLIBS="$NVCCLIBS_save -lnvToolsExt"
-      ac_ext="$ac_ext_save"
+    CXXFLAGS="$CXXFLAGS_save"
+    LDFLAGS="$LDFLAGS_save"
+    NVCCLIBS="$NVCCLIBS_save"
+    ac_ext="$ac_ext_save"
 
   else
      GPU_PASCAL_MANAGEDMEM=0
@@ -22459,14 +22460,6 @@ fi
      GPU_EXP_PINNED_ALLOC=1
 
      GPU_HEADERONLY_NVTX=0
-
-  fi
-
-
-  else
-     GPU_PASCAL_MANAGEDMEM=0
-
-     GPU_EXP_PINNED_ALLOC=1
 
   fi
 
