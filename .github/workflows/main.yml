@@ -21,15 +21,10 @@ jobs:
       matrix:
         os: [self-hosted, ubuntu-latest, macos-latest]
         python-version: ['3.8', '3.10', '3.12']
-        include:
-          - os: ubuntu-20.04
-            python-version: '3.6'
-          - os: macos-latest
-            python-version: '3.6'
       fail-fast: false
     steps:
       - name: "Software Install - Ubuntu"
-        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-20.04' || matrix.os == 'self-hosted' }}
+        if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'self-hosted' }}
         run: |
           sudo apt-get update && \
           sudo apt-get install -y \
@@ -38,7 +33,7 @@ jobs:
             build-essential \
             ca-certificates \
             curl \
-            exuberant-ctags \
+            universal-ctags \
             gfortran \
             git \
             libhwloc-dev \
@@ -51,11 +46,11 @@ jobs:
         run: |
           brew install \
             curl \
-            ctags-exuberant \
             gawk \
             gnu-sed \
             hwloc \
-            pkg-config
+            pkg-config \
+            universal-ctags
       - uses: actions/setup-python@v5.0.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -88,7 +83,7 @@ jobs:
                nbformat \
                nbconvert
       - name: "Software Install - PSRDADA"
-        if: ${{ matrix.os == 'ubuntu-20.04' || matrix.os == 'self-hosted' }}
+        if: ${{ matrix.os == 'self-hosted' }}
         run: |
           git clone git://git.code.sf.net/p/psrdada/code psrdada
           cd psrdada
@@ -132,8 +127,9 @@ jobs:
           UNITTEST_OS: ${{ matrix.os }}
           UNITTEST_PY: ${{ matrix.python-version }}
         if: ${{ matrix.os == 'self-hosted' && matrix.python-version == '3.8' }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./test/coverage.xml, ./testbench/coverage.xml
           env_vars: UNITTEST_OS,UNITTEST_PY
           fail_ci_if_error: false
