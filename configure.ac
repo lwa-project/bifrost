@@ -288,8 +288,11 @@ AS_IF([test x$enable_map_cache != xno],
 AC_ARG_WITH([map_cache_dir],
             [AS_HELP_STRING([--with-map-cache-dir],
                             [directory for the bifrost.map kernels (default=~/.bifrost)])],
-            [],
-            [with_map_cache_dir=0])
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="#define BF_MAP_KERNEL_DISK_CACHE_DIR \"$withval\""
+             with_map_cache_dir=$withval],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="/* BF_MAP_KERNEL_DISK_CACHE_DIR not defined - using default */"
+             with_map_cache_dir=0])
+AC_SUBST([BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE])
 AC_SUBST([MAP_CACHE_DIR], [$with_map_cache_dir])
 
 #
