@@ -156,8 +156,8 @@ public:
             int c=0;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i *dest_p;
-            __m256i vecbuf[1];
-            uint64_t *in64 = (uint64_t *)in;
+            __m256i buf;
+            uint32_t *in32 = (uint32_t *)in;
             dest_p = (__m256i *)(out + (words_per_chan_out * (pkt_chan)) + pol_offset_out);
 #endif
             //if((pol_offset_out == 0) && (pkt_chan==0) && ((pkt->seq % 120)==0) ){
@@ -165,9 +165,9 @@ public:
             //}
             for(c=0; c<pkt->nchan; c++) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               vecbuf[0] = _mm256_set_epi64x(in64[3], in64[2], in64[1], in64[0]);
-               _mm256_stream_si256(dest_p, vecbuf[0]);
-               in64 += 4;
+               buf = _mm256_set_epi64x(in32[3], in32[2], in32[1], in32[0]);
+               _mm256_stream_si256(dest_p, buf);
+               in32 += 4;
                dest_p += words_per_chan_out;
 #else
                ::memcpy(&out[pkt->src + pkt->nsrc*c],
