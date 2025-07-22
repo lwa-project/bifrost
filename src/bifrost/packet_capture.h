@@ -71,6 +71,8 @@ BFstatus bfPacketCaptureCallbackSetCHIPS(BFpacketcapture_callback obj,
                                          BFpacketcapture_chips_sequence_callback callback);
 BFstatus bfPacketCaptureCallbackSetSNAP2(BFpacketcapture_callback obj,
                                          BFpacketcapture_snap2_sequence_callback callback);
+BFstatus bfPacketCaptureCallbackSetZCU102(BFpacketcapture_callback obj,
+                                          BFpacketcapture_zcu102_sequence_callback callback);
 BFstatus bfPacketCaptureCallbackSetIBeam(BFpacketcapture_callback obj,
                                          BFpacketcapture_ibeam_sequence_callback callback);
 BFstatus bfPacketCaptureCallbackSetPBeam(BFpacketcapture_callback obj,
