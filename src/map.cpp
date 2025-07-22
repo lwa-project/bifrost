@@ -590,7 +590,7 @@ class DiskCacheMgr {
 
 	DiskCacheMgr()
 #if defined(BF_MAP_KERNEL_DISK_CACHE_DIR)
-    : _cachedir(std::string(BF_MAP_KERNEL_DISK_CACHE)+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
+    : _cachedir(BF_MAP_KERNEL_DISK_CACHE_DIR+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
 #else
     : _cachedir(get_home_dir()+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
 #endif
