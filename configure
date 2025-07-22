@@ -22720,10 +22720,9 @@ fi
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for AVX support via '-mavx'" >&5
 printf %s "checking for AVX support via '-mavx'... " >&6; }
 
-    CXXFLAGS_temp="$CXXFLAGS -mavx"
-    ac_run_save="$ac_run"
+    CXXFLAGS_save="$CXXFLAGS"
 
-    ac_run="$CXX -o conftest$ac_ext $CXXFLAGS_temp conftest.$ac_ext>&5"
+    CXXFLAGS="$CXXFLAGS -mavx"
     if test "$cross_compiling" = yes
 then :
   { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
@@ -22750,7 +22749,6 @@ _ACEOF
 if ac_fn_cxx_try_run "$LINENO"
 then :
 
-     CXXFLAGS="$CXXFLAGS -mavx"
      HAVE_AVX=1
 
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
@@ -22758,6 +22756,7 @@ printf "%s\n" "yes" >&6; }
 
 else case e in #(
   e)
+     CXXFLAGS="$CXXFLAGS_save"
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
 printf "%s\n" "no" >&6; }
      ;;
@@ -22791,10 +22790,9 @@ fi
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for AVX-512 support via '-mavx512f'" >&5
 printf %s "checking for AVX-512 support via '-mavx512f'... " >&6; }
 
-    CXXFLAGS_temp="$CXXFLAGS -mavx512f"
-    ac_run_save="$ac_run"
+    CXXFLAGS_save="$CXXFLAGS"
 
-    ac_run="$CXX -o conftest$ac_ext $CXXFLAGS_temp conftest.$ac_ext>&5"
+    CXXFLAGS="$CXXFLAGS -mavx512f"
     if test "$cross_compiling" = yes
 then :
   { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
@@ -22821,7 +22819,6 @@ _ACEOF
 if ac_fn_cxx_try_run "$LINENO"
 then :
 
-     CXXFLAGS="$CXXFLAGS -mavx512f"
      HAVE_AVX512=1
 
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
@@ -22829,6 +22826,7 @@ printf "%s\n" "yes" >&6; }
 
 else case e in #(
   e)
+     CXXFLAGS="$CXXFLAGS_save"
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
 printf "%s\n" "no" >&6; }
      ;;
