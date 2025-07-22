@@ -876,7 +876,6 @@ enable_debug
 enable_trace
 enable_sse
 enable_avx
-enable_avx512
 enable_native_arch
 enable_cuda_debug
 enable_map_cache
@@ -1556,7 +1555,6 @@ Optional Features:
   --enable-trace          enable tracing mode for nvprof/nvvp (default=no)
   --disable-sse           disable SSE support (default=no)
   --disable-avx           disable AVX support (default=no)
-  --disable-avx512        disable AVX512 support (default=no)
   --disable-native-arch   disable native architecture compilation (default=no)
   --enable-cuda-debug     enable CUDA debugging (nvcc -G; default=no)
   --disable-map-cache     disable caching bifrost.map kernels (default=no)
@@ -22771,75 +22769,8 @@ fi
     ac_run="$ac_run_save"
   fi
 
-
-
-  # Check whether --enable-avx512 was given.
-if test ${enable_avx512+y}
-then :
-  enableval=$enable_avx512; enable_avx512=no
-else case e in #(
-  e) enable_avx512=yes ;;
-esac
-fi
-
-
-  HAVE_AVX512=0
-
-
-  if test "$enable_avx512" = "yes"; then
-    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for AVX-512 support via '-mavx512f'" >&5
-printf %s "checking for AVX-512 support via '-mavx512f'... " >&6; }
-
-    CXXFLAGS_save="$CXXFLAGS"
-
-    CXXFLAGS="$CXXFLAGS -mavx512f"
-    if test "$cross_compiling" = yes
-then :
-  { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
-printf "%s\n" "$as_me: error: in '$ac_pwd':" >&2;}
-as_fn_error $? "cannot run test program while cross compiling
-See 'config.log' for more details" "$LINENO" 5; }
-else case e in #(
-  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-
-        #include <immintrin.h>
-int
-main (void)
-{
-
-        __m512d x = _mm512_set1_pd(1.0);
-        x = _mm512_add_pd(x, x);
-        return _mm512_cvtsd_f64(x) != 2.0;
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_run "$LINENO"
-then :
-
-     HAVE_AVX512=1
-
-     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-
-else case e in #(
-  e)
-     CXXFLAGS="$CXXFLAGS_save"
-     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-     ;;
-esac
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
-esac
-fi
-
-
-    ac_run="$ac_run_save"
-  fi
+#AX_CHECK_AVX512
+HAVE_AVX512=0
 
 
 
