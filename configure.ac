@@ -289,8 +289,8 @@ AC_ARG_WITH([map_cache_dir],
             [AS_HELP_STRING([--with-map-cache-dir],
                             [directory for the bifrost.map kernels (default=~/.bifrost)])],
             [],
-            [])
-AC_SUBST(MAP_CACHE_DIR, $with_map_cache_dir)
+            [with_map_cache_dir=0])
+AC_SUBST([MAP_CACHE_DIR], [$with_map_cache_dir])
 
 #
 # Python
@@ -515,7 +515,7 @@ AS_IF([test x$enable_native_arch != xno],
 AS_IF([test x$HAVE_FLOAT128 != x0],
       [AC_SUBST([OPTIONS], ["$OPTIONS float128"])])
 AS_IF([test x$enable_map_cache != xno],
-      [AS_IF([test x$MAP_CACHE_DIR != x],
+      [AS_IF([test x$MAP_CACHE_DIR != x0],
        [AC_SUBST([OPTIONS], ["$OPTIONS map_cache@$MAP_CACHE_DIR"])],
        [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])])
 AC_MSG_NOTICE(options:$OPTIONS)
