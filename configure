@@ -708,6 +708,8 @@ PYBUILDFLAGS
 PYTHON3
 PYTHON
 HAVE_PYTHON
+MAP_CACHE_DIR
+BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE
 HAVE_MAP_CACHE
 HAVE_CUDA_DEBUG
 enable_native_arch
@@ -878,6 +880,7 @@ enable_avx512
 enable_native_arch
 enable_cuda_debug
 enable_map_cache
+with_map_cache_dir
 enable_python
 with_python
 with_pybuild_flags
@@ -1599,6 +1602,8 @@ Optional Packages:
   --with-alignment=N      default memory alignment in bytes (default=4096)
   --with-logging-dir=DIR  directory for Bifrost proclog logging
                           (default=autodetect)
+  --with-map-cache-dir    directory for the bifrost.map kernels
+                          (default=~/.bifrost)
   --with-python=[PATH]  absolute path to python executable
   --with-pybuild-flags    build flags for python (default='')
   --with-pyinstall-flags  install flags for python (default='')
@@ -22923,6 +22928,23 @@ then :
 
 fi
 
+
+
+# Check whether --with-map_cache_dir was given.
+if test ${with_map_cache_dir+y}
+then :
+  withval=$with_map_cache_dir; BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="#define BF_MAP_KERNEL_DISK_CACHE_DIR \"$withval\""
+             with_map_cache_dir=$withval
+else case e in #(
+  e) BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="/* BF_MAP_KERNEL_DISK_CACHE_DIR not defined - using default */"
+             with_map_cache_dir=0 ;;
+esac
+fi
+
+
+MAP_CACHE_DIR=$with_map_cache_dir
+
+
 #
 # Python
 #
@@ -28537,8 +28559,15 @@ then :
 fi
 if test x$enable_map_cache != xno
 then :
-  OPTIONS="$OPTIONS map_cache"
+  if test x$MAP_CACHE_DIR != x0
+then :
+  OPTIONS="$OPTIONS map_cache@$MAP_CACHE_DIR"
 
+else case e in #(
+  e) OPTIONS="$OPTIONS map_cache"
+ ;;
+esac
+fi
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: options:$OPTIONS" >&5
 printf "%s\n" "$as_me: options:$OPTIONS" >&6;}

@@ -589,7 +589,11 @@ class DiskCacheMgr {
   }
 
 	DiskCacheMgr()
-		: _cachedir(get_home_dir()+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
+#if defined(BF_MAP_KERNEL_DISK_CACHE_DIR)
+    : _cachedir(BF_MAP_KERNEL_DISK_CACHE+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
+#else
+    : _cachedir(get_home_dir()+"/.bifrost/"+BF_MAP_KERNEL_DISK_CACHE_SUBDIR+"/"),
+#endif
 		  _loaded(false) {
 				make_dir(_cachedir);
 	}

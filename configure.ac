@@ -284,6 +284,17 @@ AC_SUBST([HAVE_MAP_CACHE], [0])
 AS_IF([test x$enable_map_cache != xno],
       [AC_SUBST([HAVE_MAP_CACHE], [$HAVE_CUDA])])
 
+
+AC_ARG_WITH([map_cache_dir],
+            [AS_HELP_STRING([--with-map-cache-dir],
+                            [directory for the bifrost.map kernels (default=~/.bifrost)])],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="#define BF_MAP_KERNEL_DISK_CACHE_DIR \"$withval\""
+             with_map_cache_dir=$withval],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="/* BF_MAP_KERNEL_DISK_CACHE_DIR not defined - using default */"
+             with_map_cache_dir=0])
+AC_SUBST([BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE])
+AC_SUBST([MAP_CACHE_DIR], [$with_map_cache_dir])
+
 #
 # Python
 #
@@ -507,7 +518,9 @@ AS_IF([test x$enable_native_arch != xno],
 AS_IF([test x$HAVE_FLOAT128 != x0],
       [AC_SUBST([OPTIONS], ["$OPTIONS float128"])])
 AS_IF([test x$enable_map_cache != xno],
-      [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])
+      [AS_IF([test x$MAP_CACHE_DIR != x0],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache@$MAP_CACHE_DIR"])],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])])
 AC_MSG_NOTICE(options:$OPTIONS)
       
 echo ""
