@@ -16,9 +16,9 @@ AC_DEFUN([AX_CHECK_SSE],
   if test "$enable_sse" = "yes"; then
     AC_MSG_CHECKING([for SSE support via '-msse'])
     
-    CXXFLAGS_temp="$CXXFLAGS -msse"
+    CXXFLAGS_save="$CXXFLAGS"
     
-    ac_run="$CXX -o conftest$ac_ext $CXXFLAGS_temp conftest.$ac_ext>&5"
+    CXXFLAGS="$CXXFLAGS -msse"
     AC_RUN_IFELSE([
       AC_LANG_PROGRAM([[
         #include <xmmintrin.h>]],
@@ -27,10 +27,10 @@ AC_DEFUN([AX_CHECK_SSE],
         x = _mm_add_ps(x, x);
         return _mm_cvtss_f32(x) != 2.0f;]])], 
     [
-     CXXFLAGS="$CXXFLAGS -msse"
      AC_SUBST([HAVE_SSE], [1])
      AC_MSG_RESULT([yes])
     ], [
+     CXXFLAGS="$CXXFLAGS_save"
      AC_MSG_RESULT([no])
     ])
   fi

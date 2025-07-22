@@ -22652,9 +22652,9 @@ fi
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for SSE support via '-msse'" >&5
 printf %s "checking for SSE support via '-msse'... " >&6; }
 
-    CXXFLAGS_temp="$CXXFLAGS -msse"
+    CXXFLAGS_save="$CXXFLAGS"
 
-    ac_run="$CXX -o conftest$ac_ext $CXXFLAGS_temp conftest.$ac_ext>&5"
+    CXXFLAGS="$CXXFLAGS -msse"
     if test "$cross_compiling" = yes
 then :
   { { printf "%s\n" "$as_me:${as_lineno-$LINENO}: error: in '$ac_pwd':" >&5
@@ -22681,7 +22681,6 @@ _ACEOF
 if ac_fn_cxx_try_run "$LINENO"
 then :
 
-     CXXFLAGS="$CXXFLAGS -msse"
      HAVE_SSE=1
 
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
@@ -22689,6 +22688,7 @@ printf "%s\n" "yes" >&6; }
 
 else case e in #(
   e)
+     CXXFLAGS="$CXXFLAGS_save"
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
 printf "%s\n" "no" >&6; }
      ;;
