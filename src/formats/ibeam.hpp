@@ -67,7 +67,7 @@ public:
 	    pkt->seq   = be64toh(pkt_hdr->seq)  - 1;
 	    //pkt->nsrc  =         pkt_hdr->nserver;
 	    pkt->nsrc  =         _nsrc;
-	    pkt->src   =  (ntohs(pkt_hdr->server( - 1) - _src0;
+	    pkt->src   =  (ntohs(pkt_hdr->server) - 1) - _src0;
 	    pkt->beam  =   ntohs(pkt_hdr->nbeam);
 	    pkt->nchan =   ntohs(pkt_hdr->nchan);
 	    pkt->chan0 =   ntohs(pkt_hdr->chan0) - pkt->nchan * pkt->src;
