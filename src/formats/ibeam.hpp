@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2025, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,11 +33,11 @@
 //#include <immintrin.h> // SSE
 
 struct __attribute__((packed)) ibeam_hdr_type {
-	uint8_t  server;   // Note: 1-based
-	uint8_t  gbe;      // (AKA tuning)
-	uint8_t  nchan;    // 109
-	uint8_t  nbeam;    // 2
-	uint8_t  nserver;  // 6
+	uint16_t server;   // Note: 1-based
+	uint16_t gbe;      // (AKA tuning)
+	uint16_t nchan;    // 109
+	uint16_t nbeam;    // 2
+	uint16_t nserver;  // 6
 	// Note: Big endian
 	uint16_t chan0;    // First chan in packet
 	uint64_t seq;      // Note: 1-based
@@ -67,9 +67,9 @@ public:
 	    pkt->seq   = be64toh(pkt_hdr->seq)  - 1;
 	    //pkt->nsrc  =         pkt_hdr->nserver;
 	    pkt->nsrc  =         _nsrc;
-	    pkt->src   =        (pkt_hdr->server - 1) - _src0;
-	    pkt->beam  =         pkt_hdr->nbeam;
-	    pkt->nchan =         pkt_hdr->nchan;
+	    pkt->src   =  (ntohs(pkt_hdr->server( - 1) - _src0;
+	    pkt->beam  =   ntohs(pkt_hdr->nbeam);
+	    pkt->nchan =   ntohs(pkt_hdr->nchan);
 	    pkt->chan0 =   ntohs(pkt_hdr->chan0) - pkt->nchan * pkt->src;
 	    pkt->payload_size = pld_size;
 	    pkt->payload_ptr  = pkt_pld;
@@ -164,11 +164,11 @@ public:
         ibeam_hdr_type* header = reinterpret_cast<ibeam_hdr_type*>(hdr);
         memset(header, 0, sizeof(ibeam_hdr_type));
         
-        header->server   = hdr_base->src + 1;
-        header->gbe      = hdr_base->tuning;
-        header->nchan    = hdr_base->nchan;
-        header->nbeam    = _nbeam;
-        header->nserver  = hdr_base->nsrc;
+        header->server   = htons(hdr_base->src + 1);
+        header->gbe      = htons(hdr_base->tuning);
+        header->nchan    = htons(hdr_base->nchan);
+        header->nbeam    = htons(_nbeam);
+        header->nserver  = htons(hdr_base->nsrc);
         header->chan0    = htons(hdr_base->chan0);
         header->seq      = htobe64(hdr_base->seq);
     }
