@@ -690,8 +690,8 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbf_impl(writer, nsamples),
                            *obj = 0);
 #define MATCH_TBX_MODE(NSTAND) \
-    } else if( std::string(format).substr(0, 5) == std::string("tbx"#NSTAND"_") \
-               || std::string(format).substr(0, 6) == std::string("tbx"#NSTAND"_") ) { \
+    } else if( std::string(format).substr(0, 6) == std::string("tbx"#NSTAND"_") \
+               || std::string(format).substr(0, 7) == std::string("tbx"#NSTAND"_") ) { \
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbx_impl<NSTAND>(writer, nsamples), \
                            *obj = 0);
     MATCH_TBX_MODE(64)
