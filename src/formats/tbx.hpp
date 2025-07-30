@@ -54,7 +54,7 @@ public:
         header->sync_word        = 0x5CDEC0DE;
         // Bits 9-32 are the frame count; bits 1-8 are the TBX packet flag
         header->frame_count_word = htobe32((framecount & 0xFFFFFF) \
-                                           | ((uint32_t) 0x04 << 24));
+                                           | ((uint32_t) 0x08 << 24));
         header->first_chan       = htobe32(hdr_base->src);
         header->nstand           = htobe32(_nstand);
         header->nchan            = htobe32(hdr_base->nchan);
