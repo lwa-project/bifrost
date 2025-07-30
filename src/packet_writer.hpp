@@ -629,7 +629,7 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
         size_t delim = sfmt.find('_');
         int nstand = std::atoi(sfmt.substr(3, delim).c_str());
         int nchan = std::atoi(sfmt.substr(delim+1, sfmt.length()).c_str());
-        nsamples = nstand*2*nchan;
+        nsamples = 2*nstand*nchan;
     } else if( std::string(format).substr(0, 6) == std::string("vbeam_") ) {
         // e.g. "vbeam_184" is a 184-channel voltage beam"
         int nchan = std::atoi((std::string(format).substr(13, std::string(format).length())).c_str());
