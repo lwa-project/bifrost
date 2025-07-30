@@ -157,7 +157,7 @@ public:
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i *dest_p;
             __m256i buf;
-            uint32_t *in32 = (uint32_t *)in;
+            uint64_t *in64 = (uint64_t *)in;
             dest_p = (__m256i *)(out + (words_per_chan_out * (pkt_chan)) + pol_offset_out);
 #endif
             //if((pol_offset_out == 0) && (pkt_chan==0) && ((pkt->seq % 120)==0) ){
@@ -165,9 +165,9 @@ public:
             //}
             for(c=0; c<pkt->nchan; c++) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               buf = _mm256_set_epi64x(in32[3], in32[2], in32[1], in32[0]);
+               buf = _mm256_set_epi64x(in64[3], in64[2], in64[1], in64[0]);
                _mm256_stream_si256(dest_p, buf);
-               in32 += 4;
+               in64 += 4;
                dest_p += words_per_chan_out;
 #else
                ::memcpy(&out[pkt->src + pkt->nsrc*c],
@@ -185,8 +185,14 @@ public:
             otype* __restrict__ aligned_data = (otype*)data;
             for( int t=0; t<nseq; ++t ) {
                    for( int c=0; c<nchan; ++c ) {
+#if defined BF_AVX_ENABLED && BF_AVX_ENABLED
+                           aligned256_type* ddst = (aligned256_type*) &aligned_data[src + nsrc*(c + nchan*t)];
+                           __m256i mtemp = _mm256_setzero_si256();
+                           _mm256_stream_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
+#else
                            ::memset(&aligned_data[src + nsrc*(c + nchan*t)],
                                     0, sizeof(otype));
+#endif
                    }
             }
     }
