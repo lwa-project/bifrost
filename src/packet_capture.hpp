@@ -500,7 +500,7 @@ private:
 		if( payload_size == -1 ) {
 			payload_size = _payload_size;
 		}
-		return _nseq_per_buf * _nsrc * payload_size * BF_UNPACK_FACTOR;
+		return (size_t) _nseq_per_buf * _nsrc * payload_size * BF_UNPACK_FACTOR;
 	}
 	inline void reserve_buf() {
 		_buf_ngood_bytes.push(0);
