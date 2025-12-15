@@ -84,18 +84,18 @@ public:
         pkt->seq   = be64toh(pkt_hdr->seq);
         pkt->time_tag = be32toh(pkt_hdr->sync_time);
 #if BF_ZCU102_DEBUG
-	fprintf(stderr, "seq: %lu\t", pkt->seq);
-	fprintf(stderr, "sync_time: %lu\t", pkt->time_tag);
-	fprintf(stderr, "nchan: %lu\t", be16toh(pkt_hdr->nchan));
-	fprintf(stderr, "npol: %lu\t", be16toh(pkt_hdr->npol));
+        fprintf(stderr, "seq: %lu\t", pkt->seq);
+        fprintf(stderr, "sync_time: %lu\t", pkt->time_tag);
+        fprintf(stderr, "nchan: %lu\t", be16toh(pkt_hdr->nchan));
+        fprintf(stderr, "npol: %lu\t", be16toh(pkt_hdr->npol));
 #endif
         int npol_blocks  = (be16toh(pkt_hdr->npol_tot) / be16toh(pkt_hdr->npol));
         int nchan_blocks = (be16toh(pkt_hdr->nchan_tot) / be16toh(pkt_hdr->nchan));
 
-        pkt->tuning = be32toh(pkt_hdr->chan0); // Abuse this so we can use chan0 to reference channel within pipeline
         pkt->nsrc = npol_blocks * nchan_blocks;// _nsrc;
         pkt->nchan  = be16toh(pkt_hdr->nchan);
         pkt->chan0  = be32toh(pkt_hdr->chan_block_id) * be16toh(pkt_hdr->nchan);
+		pkt->tuning = be32toh(pkt_hdr->chan0) - pkt->chan0; // Abuse this so we can use chan0 to reference channel within pipeline
         pkt->nchan_tot  = be16toh(pkt_hdr->nchan_tot);
         pkt->npol  = be16toh(pkt_hdr->npol);
         pkt->npol_tot  = be16toh(pkt_hdr->npol_tot);
@@ -104,13 +104,13 @@ public:
         pkt->payload_size = pld_size;
         pkt->payload_ptr  = pkt_pld;
 #if BF_ZCU102_DEBUG
-	fprintf(stderr, "nsrc: %lu\t", pkt->nsrc);
-	fprintf(stderr, "src: %lu\t", pkt->src);
-	fprintf(stderr, "chan0: %lu\t", pkt->chan0);
-	fprintf(stderr, "chan_block_id: %lu\t", be32toh(pkt_hdr->chan_block_id));
-	fprintf(stderr, "nchan_tot: %lu\t", pkt->nchan_tot);
-	fprintf(stderr, "npol_tot: %lu\t", pkt->npol_tot);
-	fprintf(stderr, "pol0: %lu\n", pkt->pol0);
+        fprintf(stderr, "nsrc: %lu\t", pkt->nsrc);
+        fprintf(stderr, "src: %lu\t", pkt->src);
+        fprintf(stderr, "chan0: %lu\t", pkt->chan0);
+        fprintf(stderr, "chan_block_id: %lu\t", be32toh(pkt_hdr->chan_block_id));
+        fprintf(stderr, "nchan_tot: %lu\t", pkt->nchan_tot);
+        fprintf(stderr, "npol_tot: %lu\t", pkt->npol_tot);
+        fprintf(stderr, "pol0: %lu\n", pkt->pol0);
 #endif
         return this->valid_packet(pkt);
     }
