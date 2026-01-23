@@ -117,8 +117,8 @@ public:
     AlignedBuffer& operator=(AlignedBuffer const& other) {
 	    if( &other != this ) {
 		    this->free();
-		    _size      = other.size;
-		    _alignment = other.alignment;
+		    _size      = other._size;
+		    _alignment = other._alignment;
 		    this->alloc();
 		    this->copy(other._buf, other._size);
 	    }
