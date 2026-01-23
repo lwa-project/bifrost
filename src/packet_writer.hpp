@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -287,12 +287,14 @@ public:
             _ibv.get_ethernet_header(&(_udp_hdr.ethernet));
             _ibv.get_ipv4_header(&(_udp_hdr.ipv4), _last_size);
             _ibv.get_udp_header(&(_udp_hdr.udp), _last_size);
-            
+
+            flags |= BF_VERBS_SENDMMSG_HEADERS_CHANGED;
+
             if( _limiter.get_rate() > 0 ) {
                 _ibv.set_rate_limit(_limiter.get_rate()*_last_size, _last_size, _max_burst_size);
             }
         }
-        
+
         for(int i=0; i<npackets; i++) {
             _iovs[3*i+0].iov_base = &_udp_hdr;
             _iovs[3*i+0].iov_len = sizeof(bf_comb_udp_hdr);
@@ -301,7 +303,7 @@ public:
             _iovs[3*i+2].iov_base = (data + i*data_size);
             _iovs[3*i+2].iov_len = data_size;
         }
-        
+
         ssize_t nsent = _ibv.sendmmsg(_mmsg, npackets, flags);
         /*
         if( nsent == -1 ) {
