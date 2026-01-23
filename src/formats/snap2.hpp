@@ -166,7 +166,7 @@ public:
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
                _mm256_stream_si256(dest_p,   _mm256_loadu_si256(src_p));
                _mm256_stream_si256(dest_p+1, _mm256_loadu_si256(src_p+1));
-               src_p += words_per_chan_in;
+               src_p += words_per_chan_out;
                dest_p += words_per_chan_out;
 #else
                ::memcpy(out + (words_per_chan_out * (pkt_chan + c)) + pol_offset_out,
