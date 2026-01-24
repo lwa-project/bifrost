@@ -180,19 +180,20 @@ public:
                                  int      nchan,
                                  int      nseq) {
             typedef aligned256_type otype;
-            otype* __restrict__ aligned_data = (otype*)data;
-            for( int t=0; t<nseq; ++t ) {
-                   for( int c=0; c<nchan; ++c ) {
+            otype* __restrict__ ptr = (otype*)data + src;
+            int count = nseq * nchan;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-                           aligned256_type* ddst = (aligned256_type*) &aligned_data[src + nsrc*(c + nchan*t)];
-                           __m256i mtemp = _mm256_setzero_si256();
-                           _mm256_stream_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
-#else
-                           ::memset(&aligned_data[src + nsrc*(c + nchan*t)],
-                                    0, sizeof(otype));
-#endif
-                   }
+            __m256i zero = _mm256_setzero_si256();
+            for( int i=0; i<count; ++i ) {
+                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr), zero);
+                   ptr += nsrc;
             }
+#else
+            for( int i=0; i<count; ++i ) {
+                   ::memset(ptr, 0, sizeof(otype));
+                   ptr += nsrc;
+            }
+#endif
     }
 };
 
