@@ -124,6 +124,7 @@ public:
      : PacketWriterMethod(fd, max_burst_size, core), _last_count(0), _iovs(NULL) {}
      ~DiskPacketWriter() {
        if( _iovs ) {
+         ::munlock(_iovs, sizeof(struct iovec)*2*_last_count);
          free(_iovs);
        }
      }
@@ -159,7 +160,7 @@ public:
         }
         
         int i = 0;
-        ssize_t status, nsend, nsent_batch, nsent = 0;
+        ssize_t nsend, nsent_batch, nsent = 0;
         while(npackets > 0) {
             _limiter.begin();
             nsend = std::min(_max_burst_size, (size_t) npackets);
