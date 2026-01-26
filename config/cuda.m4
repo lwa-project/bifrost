@@ -229,9 +229,16 @@ AC_DEFUN([AX_CHECK_CUDA],
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
     else
-      AC_SUBST([GPU_ARCHS], [$with_gpu_archs])
+      # Expand user-provided architectures to include base versions required by cuFFT pruning
+      ar_expanded=""
+      for arch in $with_gpu_archs; do
+        base=$(( (arch / 10) * 10 ))
+        ar_expanded="$ar_expanded $base $arch"
+      done
+      ar_expanded=$( echo $ar_expanded | xargs -n1 | sort -n | uniq | xargs )
+      AC_SUBST([GPU_ARCHS], [$ar_expanded])
     fi
-    
+
     AC_MSG_CHECKING([for valid requested CUDA architectures])
     ar_requested=$( echo "$GPU_ARCHS" | wc -w )
     ar_valid=$( echo $GPU_ARCHS $ar_supported | xargs -n1 | sort | uniq -d | xargs )

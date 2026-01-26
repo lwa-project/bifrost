@@ -22232,7 +22232,14 @@ fi
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
     else
-      GPU_ARCHS=$with_gpu_archs
+      # Expand user-provided architectures to include base versions required by cuFFT pruning
+      ar_expanded=""
+      for arch in $with_gpu_archs; do
+        base=$(( (arch / 10) * 10 ))
+        ar_expanded="$ar_expanded $base $arch"
+      done
+      ar_expanded=$( echo $ar_expanded | xargs -n1 | sort -n | uniq | xargs )
+      GPU_ARCHS=$ar_expanded
 
     fi
 
