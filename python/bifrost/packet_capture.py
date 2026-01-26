@@ -60,6 +60,10 @@ class PacketCaptureCallback(BifrostObject):
         self._ref_cache['snap2'] = _bf.BFpacketcapture_snap2_sequence_callback(fnc)
         _check(_bf.bfPacketCaptureCallbackSetSNAP2(
                self.obj, self._ref_cache['snap2']))
+    def set_zcu102(self, fnc: _bf.BFpacketcapture_zcu102_sequence_callback):
+        self._ref_cache['zcu102'] = _bf.BFpacketcapture_zcu102_sequence_callback(fnc)
+        _check(_bf.bfPacketCaptureCallbackSetZCU102(
+               self.obj, self._ref_cache['zcu102']))
     def set_ibeam(self, fnc: _bf.BFpacketcapture_ibeam_sequence_callback):
         self._ref_cache['ibeam'] = _bf.BFpacketcapture_ibeam_sequence_callback(fnc)
         _check(_bf.bfPacketCaptureCallbackSetIBeam(

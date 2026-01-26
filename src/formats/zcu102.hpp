@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2025-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@
 #include "base.hpp"
 
 // All entries are network (i.e. big) endian
-struct __attribute__((packed)) snap2_hdr_type {
+struct __attribute__((packed)) zcu102_hdr_type {
         uint64_t  seq;       // Spectra counter == packet counter
         uint32_t  sync_time; // UNIX sync time
         uint16_t  npol;      // Number of pols in this packet
@@ -50,12 +50,12 @@ struct __attribute__((packed)) snap2_hdr_type {
  * is valid.
  */
 
-#define BF_SNAP2_DEBUG 0
+#define BF_ZCU102_DEBUG 0
 
-class SNAP2Decoder : virtual public PacketDecoder {
+class ZCU102Decoder : virtual public PacketDecoder {
 protected:
     inline bool valid_packet(const PacketDesc* pkt) const {
-//#if BF_SNAP2_DEBUG
+//#if BF_ZCU102_DEBUG
 //        cout << "seq: "<< pkt->seq << endl;
 //        cout << "src: "<< pkt->src << endl;
 //        cout << "nsrc: "<< pkt->nsrc << endl;
@@ -71,31 +71,31 @@ protected:
                );
     }
 public:
-    SNAP2Decoder(int nsrc, int src0) : PacketDecoder(nsrc, src0) {}
+    ZCU102Decoder(int nsrc, int src0) : PacketDecoder(nsrc, src0) {}
     inline bool operator()(const uint8_t* pkt_ptr,
                            int            pkt_size,
                            PacketDesc*    pkt) const {
-        if( pkt_size < (int)sizeof(snap2_hdr_type) ) {
+        if( pkt_size < (int)sizeof(zcu102_hdr_type) ) {
             return false;
         }
-        const snap2_hdr_type* pkt_hdr  = (snap2_hdr_type*)pkt_ptr;
-        const uint8_t*        pkt_pld  = pkt_ptr  + sizeof(snap2_hdr_type);
-        int                   pld_size = pkt_size - sizeof(snap2_hdr_type);
+        const zcu102_hdr_type* pkt_hdr  = (zcu102_hdr_type*)pkt_ptr;
+        const uint8_t*         pkt_pld  = pkt_ptr  + sizeof(zcu102_hdr_type);
+        int                    pld_size = pkt_size - sizeof(zcu102_hdr_type);
         pkt->seq   = be64toh(pkt_hdr->seq);
         pkt->time_tag = be32toh(pkt_hdr->sync_time);
-#if BF_SNAP2_DEBUG
-	fprintf(stderr, "seq: %lu\t", pkt->seq);
-	fprintf(stderr, "sync_time: %lu\t", pkt->time_tag);
-	fprintf(stderr, "nchan: %lu\t", be16toh(pkt_hdr->nchan));
-	fprintf(stderr, "npol: %lu\t", be16toh(pkt_hdr->npol));
+#if BF_ZCU102_DEBUG
+        fprintf(stderr, "seq: %lu\t", pkt->seq);
+        fprintf(stderr, "sync_time: %lu\t", pkt->time_tag);
+        fprintf(stderr, "nchan: %lu\t", be16toh(pkt_hdr->nchan));
+        fprintf(stderr, "npol: %lu\t", be16toh(pkt_hdr->npol));
 #endif
         int npol_blocks  = (be16toh(pkt_hdr->npol_tot) / be16toh(pkt_hdr->npol));
         int nchan_blocks = (be16toh(pkt_hdr->nchan_tot) / be16toh(pkt_hdr->nchan));
 
-        pkt->tuning = be32toh(pkt_hdr->chan0); // Abuse this so we can use chan0 to reference channel within pipeline
         pkt->nsrc = npol_blocks * nchan_blocks;// _nsrc;
         pkt->nchan  = be16toh(pkt_hdr->nchan);
         pkt->chan0  = be32toh(pkt_hdr->chan_block_id) * be16toh(pkt_hdr->nchan);
+		pkt->tuning = be32toh(pkt_hdr->chan0) - pkt->chan0; // Abuse this so we can use chan0 to reference channel within pipeline
         pkt->nchan_tot  = be16toh(pkt_hdr->nchan_tot);
         pkt->npol  = be16toh(pkt_hdr->npol);
         pkt->npol_tot  = be16toh(pkt_hdr->npol_tot);
@@ -103,20 +103,20 @@ public:
         pkt->src = (pkt->pol0 / pkt->npol) + be32toh(pkt_hdr->chan_block_id) * npol_blocks;
         pkt->payload_size = pld_size;
         pkt->payload_ptr  = pkt_pld;
-#if BF_SNAP2_DEBUG
-	fprintf(stderr, "nsrc: %lu\t", pkt->nsrc);
-	fprintf(stderr, "src: %lu\t", pkt->src);
-	fprintf(stderr, "chan0: %lu\t", pkt->chan0);
-	fprintf(stderr, "chan_block_id: %lu\t", be32toh(pkt_hdr->chan_block_id));
-	fprintf(stderr, "nchan_tot: %lu\t", pkt->nchan_tot);
-	fprintf(stderr, "npol_tot: %lu\t", pkt->npol_tot);
-	fprintf(stderr, "pol0: %lu\n", pkt->pol0);
+#if BF_ZCU102_DEBUG
+        fprintf(stderr, "nsrc: %lu\t", pkt->nsrc);
+        fprintf(stderr, "src: %lu\t", pkt->src);
+        fprintf(stderr, "chan0: %lu\t", pkt->chan0);
+        fprintf(stderr, "chan_block_id: %lu\t", be32toh(pkt_hdr->chan_block_id));
+        fprintf(stderr, "nchan_tot: %lu\t", pkt->nchan_tot);
+        fprintf(stderr, "npol_tot: %lu\t", pkt->npol_tot);
+        fprintf(stderr, "pol0: %lu\n", pkt->pol0);
 #endif
         return this->valid_packet(pkt);
     }
 };
 
-class SNAP2Processor : virtual public PacketProcessor {
+class ZCU102Processor : virtual public PacketProcessor {
 public:
     inline void operator()(const PacketDesc* pkt,
                            uint64_t          seq0,
@@ -164,8 +164,7 @@ public:
             //}
             for(c=0; c<pkt->nchan; c++) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               _mm256_stream_si256(dest_p,   _mm256_loadu_si256(src_p));
-               _mm256_stream_si256(dest_p+1, _mm256_loadu_si256(src_p+1));
+               _mm256_stream_si256(dest_p, _mm256_loadu_si256(src_p));
                src_p += words_per_chan_out;
                dest_p += words_per_chan_out;
 #else
@@ -198,14 +197,14 @@ public:
     }
 };
 
-class SNAP2HeaderFiller : virtual public PacketHeaderFiller {
+class ZCU102HeaderFiller : virtual public PacketHeaderFiller {
 public:
-    inline int get_size() { return sizeof(snap2_hdr_type); }
+    inline int get_size() { return sizeof(zcu102_hdr_type); }
     inline void operator()(const PacketDesc* hdr_base,
                            BFoffset          framecount,
                            char*             hdr) {
-        snap2_hdr_type* header = reinterpret_cast<snap2_hdr_type*>(hdr);
-        memset(header, 0, sizeof(snap2_hdr_type));
+        zcu102_hdr_type* header = reinterpret_cast<zcu102_hdr_type*>(hdr);
+        memset(header, 0, sizeof(zcu102_hdr_type));
         
         header->seq           = htobe64(hdr_base->seq);
         header->npol          = 2;
