@@ -74,9 +74,14 @@ jobs:
         env:
           CPLUS_INCLUDE_PATH: "${{ env.pythonLocation }}/include/python\
             ${{ matrix.python-version }}"
-        run: python -m pip install \
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.8" ]; then
+            python -m pip install pycuda==2025.1.2
+          else
+            python -m pip install pycuda
+          fi
+          python -m pip install \
                cupy-cuda12x \
-               pycuda \
                numba \
                jupyterlab \
                jupyter_client \
