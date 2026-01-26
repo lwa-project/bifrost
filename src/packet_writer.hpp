@@ -345,7 +345,6 @@ public:
         }
 
         ssize_t nsent = _ibv.sendmmsg(_mmsg, npackets, flags);
-        /*
         if( nsent == -1 ) {
             std::cout << "sendmmsg failed: " << std::strerror(errno) << " with " << hdr_size << " and " << data_size << std::endl;
         }
