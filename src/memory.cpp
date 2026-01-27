@@ -87,24 +87,48 @@ class MappedMgr {
     std::map<void*, int>         _fds;
     std::map<void*, BFsize>      _lengths;
     mutable std::mutex           _mutex;
-    
+    int                          _dir_lock_fd;  // Lock on our PID directory
+
+    // Try to acquire exclusive lock on a PID directory (non-blocking)
+    // Returns fd if successful, -1 if directory is in use or doesn't exist
+    static int try_lock_pid_dir(const std::string& pid_dir) {
+        std::string lockfile = pid_dir + "/.lock";
+        int fd = ::open(lockfile.c_str(), O_RDWR, 0);
+        if( fd < 0 ) {
+            return -1;  // Lock file doesn't exist
+        }
+        if( ::flock(fd, LOCK_EX | LOCK_NB) != 0 ) {
+            ::close(fd);
+            return -1;  // Couldn't acquire lock - directory is in use
+        }
+        return fd;
+    }
+
 	void try_base_mapped_dir_cleanup() {
 		// Do this with a file lock to avoid interference from other processes
 		LockFile lock(std::string(base_mapped_dir) + ".lock");
 		DIR* dp;
-		// Remove pid dirs for which a corresponding process does not exist
+		// Remove pid dirs for which the lock can be acquired (process is gone)
 		if( (dp = opendir(base_mapped_dir)) ) {
 			struct dirent* ep;
 			while( (ep = readdir(dp)) ) {
 				pid_t pid = atoi(ep->d_name);
-				if( pid && !process_exists(pid) ) {
-					remove_files_recursively(std::string(base_mapped_dir) + "/" +
-					                         std::to_string(pid));
+				if( pid ) {
+					std::string pid_dir = std::string(base_mapped_dir) + "/" + std::to_string(pid);
+					int lock_fd = try_lock_pid_dir(pid_dir);
+					if( lock_fd >= 0 ) {
+						// We got the lock, so the original process is gone
+						// (or never properly initialized). Safe to delete.
+						::flock(lock_fd, LOCK_UN);
+						::close(lock_fd);
+						remove_files_recursively(pid_dir);
+					}
+					// If we couldn't get the lock, the directory is still in use
 				}
 			}
 			closedir(dp);
 		}
-		// Remove the base_logdir if it's empty
+		// Remove the base_mapped_dir if it's empty
 		try { remove_dir(base_mapped_dir); }
 		catch( std::exception const& ) {}
 	}
@@ -116,15 +140,28 @@ class MappedMgr {
         catch( std::exception const& ) {}
     } 
     MappedMgr()
-        : _mapped_dir(std::string(base_mapped_dir) + "/" + std::to_string(getpid())) {
+        : _mapped_dir(std::string(base_mapped_dir) + "/" + std::to_string(getpid())),
+          _dir_lock_fd(-1) {
 		this->try_base_mapped_dir_cleanup();
 		make_dir(base_mapped_dir, 0777);
 		make_dir(_mapped_dir);
+		// Create and hold a lock file in our directory to prevent cleanup race
+		std::string lockfile = _mapped_dir + "/.lock";
+		_dir_lock_fd = ::open(lockfile.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+		if( _dir_lock_fd >= 0 ) {
+			::flock(_dir_lock_fd, LOCK_EX);
+		}
 	}
     ~MappedMgr() {
         while(! _filenames.empty() ) {
             auto x = _filenames.begin();
             this->free(x->first);
+        }
+        // Release directory lock before cleanup
+        if( _dir_lock_fd >= 0 ) {
+            ::flock(_dir_lock_fd, LOCK_UN);
+            ::close(_dir_lock_fd);
+            _dir_lock_fd = -1;
         }
         try {
             remove_files_recursively(_mapped_dir);
