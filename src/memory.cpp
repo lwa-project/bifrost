@@ -44,6 +44,7 @@
 #include <dirent.h>    // For opendir, readdir, closedir
 #include <system_error>
 #include <mutex>
+#include <atomic>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -87,6 +88,7 @@ class MappedMgr {
     std::map<void*, int>         _fds;
     std::map<void*, BFsize>      _lengths;
     mutable std::mutex           _mutex;
+    std::atomic<size_t>          _alloc_count{0};  // Fast check for any allocations
     int                          _dir_lock_fd;  // Lock on our PID directory
 
     // Try to acquire exclusive lock on a PID directory (non-blocking)
@@ -175,7 +177,15 @@ public:
         static MappedMgr mm;
         return mm;
     }
+    // Fast check without locking - use for early exit when no mapped allocations exist
+    inline bool has_allocations() const {
+        return _alloc_count.load(std::memory_order_relaxed) > 0;
+    }
     inline bool is_mapped(void* data) const {
+        // Fast path: if no allocations, definitely not mapped
+        if( !has_allocations() ) {
+            return false;
+        }
         std::lock_guard<std::mutex> lock(_mutex);
         return _filenames.count(data) != 0;
     }
@@ -219,6 +229,7 @@ public:
             _fds[*data] = fd;
             _lengths[*data] = size;
         }
+        ++_alloc_count;
         return 0;
     }
     int sync(void* data) {
@@ -259,6 +270,7 @@ public:
         // Do cleanup outside the lock
         ::munmap(data, length);
         this->cleanup(filename, fd);
+        --_alloc_count;
         return 0;
     }
 };
