@@ -51,7 +51,7 @@ try:
                 func.__doc__ = docstring
             except (AttributeError, TypeError):
                 # Some objects may not allow setting __doc__
-                print('pass on', type(func))
+                pass
 
 except ImportError:
     pass
