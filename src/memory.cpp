@@ -43,6 +43,7 @@
 #include <sys/types.h> // For getpid
 #include <dirent.h>    // For opendir, readdir, closedir
 #include <system_error>
+#include <mutex>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -85,6 +86,7 @@ class MappedMgr {
     std::map<void*, std::string> _filenames;
     std::map<void*, int>         _fds;
     std::map<void*, BFsize>      _lengths;
+    mutable std::mutex           _mutex;
     
 	void try_base_mapped_dir_cleanup() {
 		// Do this with a file lock to avoid interference from other processes
@@ -137,11 +139,12 @@ public:
         return mm;
     }
     inline bool is_mapped(void* data) const {
-        if( _filenames.count(data) == 0 ) {
-            return false;
-        } else {
-            return true;
-        }
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _filenames.count(data) != 0;
+    }
+    // Internal version without locking (caller must hold _mutex)
+    inline bool is_mapped_nolock(void* data) const {
+        return _filenames.count(data) != 0;
     }
     int alloc(void** data, BFsize size) {
         // Create
@@ -171,44 +174,59 @@ public:
         
         // Advise the kernel of how we'll use it
         ::madvise(*data, size, MADV_SEQUENTIAL);
-        
+
         // Save and return
-        _filenames[*data] = filename;
-        _fds[*data] = fd;
-        _lengths[*data] = size;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _filenames[*data] = filename;
+            _fds[*data] = fd;
+            _lengths[*data] = size;
+        }
         return 0;
     }
     int sync(void* data) {
-        if( !this->is_mapped(data) ) {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if( !this->is_mapped_nolock(data) ) {
             return -1;
         }
-        
+
         return ::msync(data, _lengths[data], MS_ASYNC|MS_INVALIDATE);
     }
     void* memcpy(void* dest, void* src, BFsize count) {
         ::memcpy(dest, src, count);
-        if( this->is_mapped(dest) ) {
-            this->sync(dest);
+        std::lock_guard<std::mutex> lock(_mutex);
+        if( this->is_mapped_nolock(dest) ) {
+            ::msync(dest, _lengths[dest], MS_ASYNC|MS_INVALIDATE);
         }
         return dest;
     }
     void* memset(void* dest, int ch, BFsize count) {
         ::memset(dest, ch, count);
-        if( this->is_mapped(dest) ) {
-            this->sync(dest);
+        std::lock_guard<std::mutex> lock(_mutex);
+        if( this->is_mapped_nolock(dest) ) {
+            ::msync(dest, _lengths[dest], MS_ASYNC|MS_INVALIDATE);
         }
         return dest;
     }
     int free(void* data) {
-        if( !this->is_mapped(data) ) {
-            return -1;
+        std::string filename;
+        int fd;
+        BFsize length;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if( !this->is_mapped_nolock(data) ) {
+                return -1;
+            }
+            filename = _filenames[data];
+            fd = _fds[data];
+            length = _lengths[data];
+            _filenames.erase(data);
+            _fds.erase(data);
+            _lengths.erase(data);
         }
-        
-        ::munmap(data, _lengths[data]);
-        this->cleanup(_filenames[data], _fds[data]);
-        _filenames.erase(data);
-        _fds.erase(data);
-        _lengths.erase(data);
+        // Do cleanup outside the lock
+        ::munmap(data, length);
+        this->cleanup(filename, fd);
         return 0;
     }
 };
