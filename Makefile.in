@@ -90,6 +90,11 @@ endif
 doc: $(INC_DIR)/bifrost/*.h Doxyfile docs/source/*.rst docs/source/*.py
 ifeq ($(CAN_BUILD_CXX_DOCS),1)
 	@DX_DOXYGEN@ Doxyfile
+ifeq ($(HAVE_PYTHON),1)
+	@PYTHON@ $(BIFROST_PYTHON_DIR)/doxygen_to_pydoc.py \
+		--xml-dir docs/doxygen/xml \
+		--output $(BIFROST_PYTHON_DIR)/bifrost/libbifrost_generated_docs.py
+endif
 endif
 ifeq ($(CAN_BUILD_PYTHON_DOCS),1)
 	$(MAKE) -C docs singlehtml

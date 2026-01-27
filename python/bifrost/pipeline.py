@@ -25,6 +25,82 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""High-level pipeline infrastructure for Bifrost stream processing.
+
+This module provides the Pipeline and Block classes for building data processing
+pipelines. Blocks are connected via ring buffers and run concurrently in
+separate threads (see Cranmer et al. 2017).
+
+Terminology
+-----------
+The following terms are used throughout Bifrost:
+
+**Block**
+    A processing element that reads data from input ring buffers, performs
+    computation, and writes results to output ring buffers. Each block runs
+    in its own thread.
+
+**Sequence**
+    A logically-independent interval of data flow, such as a single observation
+    or file. Sequences have metadata headers and contain multiple frames. Blocks
+    receive ``on_sequence()`` callbacks at sequence boundaries.
+
+**Span**
+    A contiguous chunk of frames that a block processes in one ``on_data()``
+    call. The span size is controlled by ``gulp_nframe``.
+
+**Gulp**
+    The number of frames processed per ``on_data()`` call. Larger gulps improve
+    throughput but increase latency and memory usage.
+
+Threading and Asynchronicity Model
+----------------------------------
+Bifrost's asynchronicity is based on CPU threads each having their own CUDA
+stream. This design enables high performance while maintaining correctness:
+
+1. **One thread per block**: Each block runs in its own CPU thread, launched
+   by ``Pipeline.run()``. This allows blocks to execute concurrently.
+
+2. **Per-thread CUDA streams**: Each CPU thread has its own CUDA stream.
+   GPU operations within a thread are queued to that stream.
+
+3. **Synchronous within a thread**: All GPU work submitted by a block is
+   synchronous with respect to that block's thread - operations execute in
+   the order they were submitted.
+
+4. **Asynchronous between threads**: Different blocks (in different threads)
+   can have GPU work executing in parallel on different streams.
+
+5. **Explicit synchronization before data release**: Before committing data to
+   a ring buffer (making it available to downstream blocks), the pipeline calls
+   ``device.stream_synchronize()`` to ensure all GPU work completes. This
+   happens automatically in the block infrastructure after ``on_data()`` returns.
+
+This pattern ensures correctness while maximizing parallelism - data is only
+released after GPU processing completes, but multiple blocks can have GPU work
+in flight simultaneously. Block authors don't need to manage CUDA synchronization
+manually.
+
+Example
+-------
+Building and running a pipeline::
+
+    with Pipeline() as pipeline:
+        # Blocks are connected via rings
+        data = blocks.read_sigproc('input.fil')
+        gpu_data = blocks.copy(data, space='cuda')
+        processed = blocks.fft(gpu_data, axes=1)
+        blocks.write_sigproc(processed, 'output.fil')
+
+        # Run launches each block in its own thread
+        pipeline.run()
+
+See Also
+--------
+bifrost.ring : Low-level ring buffer implementation
+bifrost.blocks : Pre-built processing blocks
+"""
+
 import sys
 import threading
 import queue
@@ -82,6 +158,31 @@ def block_scope(*args, **kwargs) -> "BlockScope":
     return BlockScope(*args, **kwargs)
 
 class BlockScope(object):
+    """A hierarchical scope for configuring groups of blocks.
+
+    BlockScope provides a way to set default parameters for multiple blocks
+    without repeating them. Scopes can be nested, with child scopes inheriting
+    settings from their parents.
+
+    Use as a context manager to apply settings to all blocks created within::
+
+        with block_scope(gpu=0, core=4):
+            # All blocks here use GPU 0 and CPU core 4
+            block1 = MyBlock(ring1)
+            block2 = MyBlock(ring2)
+
+    Args:
+        name: Optional name for this scope.
+        gulp_nframe: Default number of frames per gulp for blocks in this scope.
+        buffer_nframe: Default total buffer size in frames.
+        buffer_factor: Default buffer size as a multiple of gulp size.
+        core: CPU core affinity for blocks in this scope.
+        gpu: GPU device index for blocks in this scope.
+        share_temp_storage: If True, blocks in this scope share temporary
+            storage allocations to reduce memory usage.
+        fuse: If True, blocks in this scope are "fused" for optimization,
+            reducing buffer sizes between them.
+    """
     instance_count = 0
     def __init__(self,
                  name: Optional[str]=None,
@@ -434,6 +535,46 @@ class Block(BlockScope):
         return ['any'] * len(self.irings)
 
 class SourceBlock(Block):
+    """Base class for blocks that generate data from external sources.
+
+    SourceBlock is used to read data from files, network streams, or other
+    external sources and feed it into a pipeline. It has no input rings
+    and produces one output ring.
+
+    Subclasses must implement:
+
+    - ``create_reader(sourcename)``: Return a context manager for reading
+      from the named source.
+    - ``on_sequence(reader, sourcename)``: Called at the start of each source.
+      Must return a list containing one output header dict with at least
+      a ``_tensor`` key describing the data shape and dtype.
+    - ``on_data(reader, ospans)``: Called repeatedly to fill output spans.
+      Must return a list with the number of frames written to each output,
+      or 0 to signal end of data.
+
+    Args:
+        sourcenames: Iterable of source identifiers (e.g., filenames).
+        gulp_nframe: Number of frames to produce per output span.
+        space: Memory space for the output ring. Defaults to 'cuda_host'
+            if CUDA is available, otherwise 'system'.
+
+    Example::
+
+        class FileReaderBlock(SourceBlock):
+            def create_reader(self, filename):
+                return open(filename, 'rb')
+
+            def on_sequence(self, reader, filename):
+                return [{'_tensor': {'shape': [-1, 1024], 'dtype': 'f32'},
+                         'name': filename}]
+
+            def on_data(self, reader, ospans):
+                data = reader.read(ospans[0].data.nbytes)
+                if not data:
+                    return [0]  # End of file
+                ospans[0].data.flat[:len(data)] = np.frombuffer(data, 'f32')
+                return [len(data) // ospans[0].frame_nbyte]
+    """
     def __init__(self, sourcenames, gulp_nframe, space=None, *args, **kwargs):
         super(SourceBlock, self).__init__([], *args, gulp_nframe=gulp_nframe, **kwargs)
         self.sourcenames = sourcenames
@@ -515,6 +656,38 @@ def _span_slice(soft_slice):
                  soft_slice.step or (soft_slice.stop - start))
 
 class MultiTransformBlock(Block):
+    """Base class for blocks with multiple inputs and/or outputs.
+
+    MultiTransformBlock reads from N input rings and writes to N output
+    rings (one output per input, in the same memory space). For simpler
+    single-input/single-output cases, use TransformBlock instead.
+
+    Subclasses must implement:
+
+    - ``on_sequence(iseqs)``: Called when new sequences are available on all
+      inputs. Receives a list of input sequences. Must return a list of
+      output header dicts (one per output).
+    - ``on_data(ispans, ospans)``: Called to process each gulp of data.
+      Receives lists of input and output spans. Must return a list of
+      frame counts to commit for each output, or None to commit all frames.
+
+    Optional overrides:
+
+    - ``on_sequence_end(iseqs)``: Called when input sequences end. Use for cleanup.
+    - ``on_skip(islices, ospans)``: Called when input frames were skipped
+      (overwritten before being read). Default zeros the output.
+    - ``define_input_overlap_nframe(iseqs)``: Return overlap frames needed
+      between consecutive input spans (e.g., for filters). Default is 0.
+    - ``define_output_nframes(input_nframes)``: Return output frame counts
+      given input frame counts. Default is same as input.
+    - ``define_valid_input_spaces()``: Return list of valid memory spaces
+      for each input. Default is 'any'.
+
+    Args:
+        irings: List of input rings (or blocks whose output rings to use).
+        guarantee: If True (default), guarantee input data won't be
+            overwritten while being read.
+    """
     def __init__(self, irings_, guarantee=True, *args, **kwargs):
         super(MultiTransformBlock, self).__init__(irings_, *args, **kwargs)
         # Note: Must use self.irings rather than irings_ because they may
@@ -688,6 +861,41 @@ class MultiTransformBlock(Block):
         raise NotImplementedError
 
 class TransformBlock(MultiTransformBlock):
+    """Base class for blocks with one input and one output.
+
+    TransformBlock is the most common block type, used for operations that
+    transform a single data stream. It simplifies the MultiTransformBlock
+    interface by removing the list wrappers.
+
+    Subclasses must implement:
+
+    - ``on_sequence(iseq)``: Called when a new input sequence starts.
+      Must return an output header dict with at least a ``_tensor`` key.
+    - ``on_data(ispan, ospan)``: Called to process each gulp. Write results
+      to ``ospan.data``. Return the number of frames to commit, or None
+      to commit all frames.
+
+    Optional overrides:
+
+    - ``on_sequence_end(iseq)``: Called when the input sequence ends.
+    - ``on_skip(islice, ospan)``: Handle skipped frames. Default zeros output.
+    - ``define_input_overlap_nframe(iseq)``: Frames of overlap between gulps.
+    - ``define_output_nframes(input_nframe)``: Output frames given input frames.
+    - ``define_valid_input_spaces()``: Valid memory spaces for input.
+
+    Args:
+        iring: Input ring (or block whose output ring to use).
+
+    Example::
+
+        class SquareBlock(TransformBlock):
+            def on_sequence(self, iseq):
+                return iseq.header  # Same shape/dtype as input
+
+            def on_data(self, ispan, ospan):
+                ospan.data[...] = ispan.data ** 2
+                return None  # Commit all frames
+    """
     def __init__(self, iring, *args, **kwargs):
         super(TransformBlock, self).__init__([iring], *args, **kwargs)
         self.iring = self.irings[0]
@@ -740,8 +948,42 @@ class TransformBlock(MultiTransformBlock):
         #    with oseq.reserve(onframe) as ospan:
         #        bf.ndarray.memset_array(ospan.data, 0)
 
-# TODO: Need something like on_sequence_end to allow closing open files etc.
 class SinkBlock(MultiTransformBlock):
+    """Base class for blocks that consume data without producing output.
+
+    SinkBlock is used for pipeline endpoints that write data to files,
+    send it over the network, or otherwise consume it. It has one input
+    ring and no output rings.
+
+    Subclasses must implement:
+
+    - ``on_sequence(iseq)``: Called when a new input sequence starts.
+      Use to open output files, initialize state, etc.
+    - ``on_data(ispan)``: Called to consume each gulp of input data.
+      No return value needed.
+
+    Optional overrides:
+
+    - ``on_sequence_end(iseq)``: Called when the input sequence ends.
+      Use to close files, flush buffers, etc.
+    - ``define_input_overlap_nframe(iseq)``: Frames of overlap between gulps.
+    - ``define_valid_input_spaces()``: Valid memory spaces for input.
+
+    Args:
+        iring: Input ring (or block whose output ring to use).
+
+    Example::
+
+        class FileWriterBlock(SinkBlock):
+            def on_sequence(self, iseq):
+                self.file = open(iseq.header['name'] + '.dat', 'wb')
+
+            def on_data(self, ispan):
+                self.file.write(ispan.data.tobytes())
+
+            def on_sequence_end(self, iseq):
+                self.file.close()
+    """
     def __init__(self, iring, *args, **kwargs):
         super(SinkBlock, self).__init__([iring], *args, **kwargs)
         self.orings = []

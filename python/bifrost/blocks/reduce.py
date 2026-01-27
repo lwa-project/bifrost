@@ -37,6 +37,21 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class ReduceBlock(TransformBlock):
+    """Block that reduces data along an axis using a specified operation.
+
+    Performs reduction operations like sum, mean, min, max along a
+    specified axis, reducing the axis size by a given factor.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space.
+        axis: Axis to reduce (index or label).
+        factor: Reduction factor. If None, reduces the entire axis.
+        op: Reduction operation ('sum', 'mean', 'min', 'max', 'stderr',
+            'pwrsum', 'pwrmean', 'pwrmin', 'pwrmax', 'pwrstderr').
+
+    See Also:
+        :func:`reduce`: Convenience function to create this block.
+    """
     def __init__(self, iring, axis, factor=None, op='sum', *args, **kwargs):
         super(ReduceBlock, self).__init__(iring, *args, **kwargs)
         self.specified_axis   = axis

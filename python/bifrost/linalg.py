@@ -35,19 +35,60 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class LinAlg(BifrostObject):
+    """GPU-accelerated linear algebra operations using cuBLAS.
+
+    LinAlg provides matrix multiplication and related operations
+    optimized for Bifrost arrays on the GPU.
+
+    Example:
+        >>> linalg = LinAlg()
+        >>> # C = 1.0 * A @ B + 0.0 * C
+        >>> linalg.matmul(1.0, A, B, 0.0, C)
+    """
     def __init__(self):
+        """Create a new linear algebra context."""
         BifrostObject.__init__(self, _bf.bfLinAlgCreate, _bf.bfLinAlgDestroy)
     def matmul(self, alpha: float, a: Optional[ndarray], b: Optional[ndarray], beta: float, c: ndarray) -> ndarray:
-        """Computes:
-          c = alpha*a.b + beta*c
-        or if b is None:
-          c = alpha*a.a^H + beta*c
-        or if a is None:
-          c = alpha*b^H.b + beta*c
-        where '.' is matrix product and '^H' is Hermitian transpose.
-        Multi-dimensional semantics are the same as numpy.matmul:
-          The last two dims represent the matrix, and all other dims are
-          used as batch dims to be matched or broadcast between a and b.
+        """Perform GPU-accelerated matrix multiplication.
+
+        Computes one of the following depending on inputs:
+        - ``c = alpha * a @ b + beta * c`` (if both a and b provided)
+        - ``c = alpha * a @ a^H + beta * c`` (if b is None)
+        - ``c = alpha * b^H @ b + beta * c`` (if a is None)
+
+        where ``@`` is matrix product and ``^H`` is Hermitian transpose.
+
+        Multi-dimensional semantics follow numpy.matmul: the last two
+        dimensions represent the matrix, and all other dimensions are
+        batch dimensions that are matched or broadcast between a and b.
+
+        Args:
+            alpha: Scalar multiplier for the product term.
+            a: Left matrix operand, or None for b^H @ b form.
+            b: Right matrix operand, or None for a @ a^H form.
+            beta: Scalar multiplier for the existing c values.
+            c: Output matrix (modified in-place).
+
+        Returns:
+            ndarray: The output matrix c.
+
+        **Tensor semantics**::
+
+            Input a:  [..., M, K], space = CUDA
+            Input b:  [..., K, N], space = CUDA
+            Output c: [..., M, N], space = CUDA
+
+        Supported dtype combinations:
+            - ci8 inputs -> cf32 output (requires GPU compute capability >= 5.0)
+            - cf32 inputs -> cf32 output
+            - cf64 inputs -> cf64 output
+            - f32 inputs -> f32 output
+            - f64 inputs -> f64 output
+
+        Example:
+            >>> linalg = LinAlg()
+            >>> # Compute correlation matrix: C = X @ X^H
+            >>> linalg.matmul(1.0, X, None, 0.0, C)
         """
         if alpha is None:
             alpha = 1.

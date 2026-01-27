@@ -33,6 +33,31 @@ from bifrost import telemetry
 telemetry.track_module()
 
 def quantize(src: ndarray, dst: ndarray, scale: float=1.) -> ndarray:
+    """Quantize data from one dtype to another with scaling.
+
+    This function converts data between data types, applying a scale factor
+    and proper rounding/clipping for integer types. Useful for converting
+    floating-point data to lower-precision integer formats for storage
+    or transmission.
+
+    Args:
+        src: Source array to quantize.
+        dst: Destination array (must have same shape as src).
+        scale: Scale factor applied before quantization. The output is
+            computed as round(src * scale).
+
+    Returns:
+        ndarray: The destination array (same as dst).
+
+    **Tensor semantics**::
+
+        Input:  [...], dtype = any numeric type, space = CUDA
+        Output: [...], dtype = any numeric type, space = CUDA
+
+    Example:
+        >>> # Quantize 32-bit float to 8-bit signed integer
+        >>> quantize(float_data, int8_data, scale=127.0)
+    """
     src_bf = asarray(src).as_BFarray()
     dst_bf = asarray(dst).as_BFarray()
     _check(_bf.bfQuantize(src_bf, dst_bf, scale))

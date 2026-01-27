@@ -25,8 +25,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""
-telescope_id:  0 (FAKE)
+"""Sigproc filterbank file format support.
+
+This module provides reading and writing of Sigproc filterbank files,
+a common format for pulsar and transient search data.
+
+Sigproc header fields:
 machine_id:    0 (FAKE)
 data_type:     2 # Time-series data
 rawdatafile:   <delete>
@@ -143,8 +147,24 @@ _machines   = defaultdict(lambda: 'unknown',
                            53: 'LWA-ADP'})
 
 def id2telescope(id_: int) -> str:
+    """Convert telescope ID to name string.
+
+    Args:
+        id_: Numeric telescope identifier.
+
+    Returns:
+        str: Telescope name (e.g., 'Parkes', 'GBT').
+    """
     return _telescopes[id_]
 def telescope2id(name: str) -> int:
+    """Convert telescope name to ID.
+
+    Args:
+        name: Telescope name string.
+
+    Returns:
+        int: Numeric telescope identifier.
+    """
     # TODO: Would be better to use a pre-made reverse lookup dict
     return list(_telescopes.keys())[list(_telescopes.values()).index(name)]
 def id2machine(id_: int) -> str:
@@ -178,6 +198,12 @@ def _header_read(f):
     return s.decode()
 
 def write_header(hdr: Dict[str,Any], f: IO[bytes]):
+    """Write a Sigproc header to a file.
+
+    Args:
+        hdr: Dictionary of header key-value pairs.
+        f: Open binary file handle.
+    """
     _header_write_string(f, "HEADER_START")
     for key, val in hdr.items():
         if val is None:
@@ -234,6 +260,20 @@ def _read_header(f):
 
 # TODO: Move this elsewhere?
 def unpack(data: np.ndarray, nbit: int) -> np.ndarray:
+    """Unpack sub-byte data to full bytes.
+
+    Expands packed data (1, 2, or 4 bits per sample) to 8-bit values.
+
+    Args:
+        data: Input array of packed uint8 values.
+        nbit: Bits per sample (1, 2, 4, or 8).
+
+    Returns:
+        np.ndarray: Unpacked array with one sample per byte.
+
+    Raises:
+        ValueError: If nbit is invalid.
+    """
     if nbit > 8:
         raise ValueError("unpack: nbit must be <= 8")
     if 8 % nbit != 0:
@@ -267,10 +307,31 @@ def unpack(data: np.ndarray, nbit: int) -> np.ndarray:
 # TODO: Add support for writing
 #       Add support for data_type != filterbank
 class SigprocFile(object):
+    """Reader for Sigproc filterbank files.
+
+    Provides file-like access to filterbank data with automatic
+    header parsing and sub-byte unpacking support.
+
+    Args:
+        filename: Path to the filterbank file. If provided, opens immediately.
+
+    Example:
+        >>> with SigprocFile('data.fil') as f:
+        ...     print(f.header)
+        ...     data = f.read(1000)  # Read 1000 time samples
+    """
     def __init__(self, filename: Optional[str]=None):
         if filename is not None:
             self.open(filename)
     def open(self, filename: str) -> "SigprocFile":
+        """Open a Sigproc filterbank file.
+
+        Args:
+            filename: Path to the filterbank file.
+
+        Returns:
+            SigprocFile: Self, for method chaining.
+        """
         # Note: If nbit < 8, pack_factor = 8 // nbit and the last dimension
         #         is divided by pack_factor, with dtype set to uint8.
         self.f = open(filename, 'rb')
@@ -315,6 +376,7 @@ class SigprocFile(object):
         self.frame_nbyte = self.frame_nbit // 8
         return self
     def close(self) -> None:
+        """Close the file."""
         self.f.close()
     def __enter__(self):
         return self
@@ -325,13 +387,17 @@ class SigprocFile(object):
             offset += self.header_size
         self.f.seek(offset, whence)
     def bandwidth(self) -> float:
+        """Get the total bandwidth in MHz."""
         return self.header['nchans'] * self.header['foff']
     def cfreq(self) -> float:
+        """Get the center frequency in MHz."""
         return (self.header['fch1'] +
                 0.5 * (self.header['nchans'] - 1) * self.header['foff'])
     def duration(self) -> float:
+        """Get the total duration in seconds."""
         return self.header['tsamp'] * self.nframe()
     def nframe(self) -> int:
+        """Get the number of time samples in the file."""
         if 'nsamples' not in self.header or self.header['nsamples'] == 0:
             curpos = self.f.tell()
             self.f.seek(0, 2) # Seek to end of file
@@ -342,6 +408,16 @@ class SigprocFile(object):
             self.f.seek(curpos, 0) # Seek back to where we were
         return self.header['nsamples']
     def read(self, nframe_or_start: int, end: Optional[int]=None) -> np.ndarray:
+        """Read time samples from the file.
+
+        Args:
+            nframe_or_start: If end is None, number of frames to read.
+                Otherwise, starting frame index.
+            end: Optional ending frame index (-1 for end of file).
+
+        Returns:
+            np.ndarray: Data array with shape (ntime, nif, nchan).
+        """
         if end is not None:
             start = nframe_or_start or 0
             if start * self.frame_size * self.nbit % 8 != 0:

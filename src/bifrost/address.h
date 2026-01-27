@@ -26,6 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file address.h
+ *  \brief Network address creation and manipulation functions
+ *
+ *  This module provides functionality for creating and querying network
+ *  addresses for UDP I/O operations.
+ */
+
 #ifndef BF_ADDRESS_H_INCLUDE_GUARD_
 #define BF_ADDRESS_H_INCLUDE_GUARD_
 
@@ -37,15 +44,64 @@ extern "C" {
 
 typedef struct sockaddr* BFaddress;
 
+/*! \p bfAddressCreate creates a new network address object
+ *
+ *  \param addr         Pointer to receive the created address handle
+ *  \param addr_string  IP address string (e.g., "192.168.1.1")
+ *  \param port         UDP port number
+ *  \param family       Address family (AF_INET or AF_UNSPEC for auto-detect)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressCreate(BFaddress*  addr,
                          const char* addr_string,
                          int         port,
                          unsigned    family);
+/*! \p bfAddressDestroy releases an address object
+ *
+ *  \param addr The address to destroy
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressDestroy(BFaddress addr);
+
+/*! \p bfAddressGetFamily retrieves the address family
+ *
+ *  \param addr   The address object
+ *  \param family Pointer to receive the address family
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressGetFamily(BFaddress addr, unsigned* family);
+
+/*! \p bfAddressGetPort retrieves the port number
+ *
+ *  \param addr The address object
+ *  \param port Pointer to receive the port number
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressGetPort(BFaddress addr, int* port);
+
+/*! \p bfAddressIsMulticast checks if the address is a multicast address
+ *
+ *  \param addr      The address object
+ *  \param multicast Pointer to receive 1 if multicast, 0 otherwise
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressIsMulticast(BFaddress addr, int* multicast);
+
+/*! \p bfAddressGetMTU retrieves the Maximum Transmission Unit for the address
+ *
+ *  \param addr The address object
+ *  \param mtu  Pointer to receive the MTU in bytes
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressGetMTU(BFaddress addr, int* mtu);
+
+/*! \p bfAddressGetString converts the address to a string representation
+ *
+ *  \param addr    The address object
+ *  \param bufsize Size of the output buffer (128 bytes is always sufficient)
+ *  \param buf     Buffer to receive the address string
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAddressGetString(BFaddress addr,
                             BFsize    bufsize, // 128 should always be enough
                             char*     buf);

@@ -34,6 +34,19 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class CopyBlock(TransformBlock):
+    """Block that copies data, optionally to a different memory space.
+
+    This block is commonly used to transfer data between CPU and GPU memory.
+    The output header is identical to the input header.
+
+    Args:
+        iring: Input ring or block.
+        space: Output memory space ('system', 'cuda', 'cuda_host').
+            If None, uses the same space as the input.
+
+    See Also:
+        :func:`copy`: Convenience function to create this block.
+    """
     def __init__(self, iring, space=None, *args, **kwargs):
         super(CopyBlock, self).__init__(iring, *args, **kwargs)
         if space is None:

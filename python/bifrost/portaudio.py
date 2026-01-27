@@ -31,12 +31,27 @@
 # Ubuntu 16.04:
 #     sudo apt-get install portaudio19-dev
 
+"""PortAudio wrapper for audio I/O.
+
+This module provides a minimal wrapper for the PortAudio library,
+enabling real-time audio input and output for Bifrost pipelines.
+
+Requirements:
+    Ubuntu/Debian: ``sudo apt-get install portaudio19-dev``
+    Fedora/RHEL: ``sudo dnf install portaudio-devel``
+
+Example:
+    >>> import bifrost.portaudio as audio
+    >>> with audio.open(mode='r', rate=44100, channels=2) as stream:
+    ...     data = stream.read(1024)
+"""
+
 import ctypes
 import atexit
 from threading import Lock
 import os
 
-from typing import Union
+from typing import Optional, Union
 
 from bifrost import telemetry
 telemetry.track_module()
@@ -139,6 +154,24 @@ with suppress_fd('stderr'):
 atexit.register(_lib.Pa_Terminate)
 
 class Stream(object):
+    """Audio stream for reading/writing audio data.
+
+    Provides a file-like interface for audio I/O using PortAudio.
+
+    Args:
+        mode: Open mode - 'r' for read, 'w' for write, 'r+' for both.
+        rate: Sample rate in Hz (default: 44100).
+        channels: Number of audio channels (default: 2 for stereo).
+        nbits: Bits per sample (8, 16, 24, or 32).
+        frames_per_buffer: Buffer size in frames.
+        input_device: Input device name/index (None for default).
+        output_device: Output device name/index (None for default).
+
+    Example:
+        >>> with Stream(mode='r', rate=44100, channels=2) as stream:
+        ...     buf = np.zeros((1024, 2), dtype=np.int16)
+        ...     stream.readinto(buf.data)
+    """
     def __init__(self,
                  mode: str='r',
                  rate: int=44100,
@@ -189,6 +222,7 @@ class Stream(object):
                                   None))
         self.start()
     def close(self) -> None:
+        """Close the audio stream and release resources."""
         self.stop()
         with self.lock:
             _check(_lib.Pa_CloseStream(self.stream))
@@ -197,19 +231,37 @@ class Stream(object):
     def __exit__(self, type, value, tb):
         self.close()
     def start(self) -> None:
+        """Start the audio stream."""
         with self.lock:
             _check(_lib.Pa_StartStream(self.stream))
             self.running = True
     def stop(self) -> None:
+        """Stop the audio stream."""
         with self.lock:
             if self.running:
                 _check(_lib.Pa_StopStream(self.stream))
                 self.running = False
     def read(self, nframe: int) -> memoryview:
+        """Read audio frames from the stream.
+
+        Args:
+            nframe: Number of frames to read.
+
+        Returns:
+            memoryview: Buffer containing the audio data.
+        """
         nbyte = nframe * self.frame_nbyte
         buf = ctypes.create_string_buffer("UNINITIALIZED"[:nbyte], nbyte)
         return self.readinto(buf)
     def readinto(self, buf: memoryview) -> memoryview:
+        """Read audio data into an existing buffer.
+
+        Args:
+            buf: Buffer to read into (must have correct size).
+
+        Returns:
+            memoryview: The same buffer with audio data.
+        """
         with self.lock:
             assert(len(buf) % self.frame_nbyte == 0)
             nframe = len(buf) // self.frame_nbyte
@@ -222,20 +274,46 @@ class Stream(object):
             _check(_lib.Pa_ReadStream(self.stream, buf_view, nframe))
             return buf
     def write(self, buf: memoryview) -> memoryview:
+        """Write audio data to the stream.
+
+        Args:
+            buf: Buffer containing audio data to write.
+
+        Returns:
+            memoryview: The same buffer.
+        """
         with self.lock:
             assert(len(buf) % self.frame_nbyte == 0)
             nframe = len(buf) // self.frame_nbyte
             buf_view = (ctypes.c_byte * len(buf)).from_buffer(buf)
             _check(_lib.Pa_WriteStream(self.stream, buf_view, nframe))
             return buf
-    def time(self) -> int:
+    def time(self) -> float:
+        """Get the current stream time.
+
+        Returns:
+            float: Stream time in seconds since the stream was started.
+        """
         with self.lock:
             return _lib.Pa_GetStreamTime(self.stream)
 
 def open(*args, **kwargs) -> Stream:
+    """Open an audio stream.
+
+    This is a convenience function equivalent to Stream(...).
+    See Stream for argument documentation.
+
+    Returns:
+        Stream: An open audio stream.
+    """
     return Stream(*args, **kwargs)
 
 def get_device_count() -> int:
+    """Get the number of available audio devices.
+
+    Returns:
+        int: Number of audio input/output devices.
+    """
     return _lib.Pa_GetDeviceCount()
 
 if __name__ == "__main__":

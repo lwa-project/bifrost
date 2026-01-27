@@ -34,6 +34,20 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class FftShiftBlock(TransformBlock):
+    """Block that shifts zero-frequency component to the center.
+
+    Applies numpy.fft.fftshift-like operation, cyclically shifting data
+    so the zero-frequency component moves to the center of the spectrum.
+    Axis scales are adjusted accordingly.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space.
+        axes: Axis or list of axes to shift (indices or labels).
+        inverse: If True, apply inverse shift (ifftshift).
+
+    See Also:
+        :func:`fftshift`: Convenience function to create this block.
+    """
     def __init__(self, iring, axes, inverse=False,
                  *args, **kwargs):
         super(FftShiftBlock, self).__init__(iring, *args, **kwargs)

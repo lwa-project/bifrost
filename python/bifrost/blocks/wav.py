@@ -79,6 +79,18 @@ def wav_write_header(f: IO[bytes], hdr:Dict[str,int], chunk_size: int=0, data_si
                         'data', data_size))
 
 class WavSourceBlock(SourceBlock):
+    """Block that reads WAV audio files.
+
+    Reads standard PCM WAV files and outputs audio samples. Each file
+    becomes a separate sequence.
+
+    Args:
+        sourcefiles: List of input WAV file paths.
+        gulp_nframe: Number of audio samples to read per gulp.
+
+    See Also:
+        :func:`read_wav`: Convenience function to create this block.
+    """
     def create_reader(self, sourcename: str) -> IO[bytes]:
         return open(sourcename, 'rb')
     def on_sequence(self, reader: IO[bytes], sourcename: str) -> List[Dict[str,Any]]:
@@ -133,6 +145,22 @@ def read_wav(sourcefiles: List[str], gulp_nframe: int,
     return WavSourceBlock(sourcefiles, gulp_nframe, *args, **kwargs)
 
 class WavSinkBlock(SinkBlock):
+    """Block that writes data to WAV audio files.
+
+    Writes PCM WAV files from input data. Each sequence produces one
+    or more output files.
+
+    Note:
+        The file size fields in the WAV header are written as zero
+        because the total size is not known in a streaming context.
+
+    Args:
+        iring: Input ring or block.
+        path: Output directory path. If None, uses current directory.
+
+    See Also:
+        :func:`write_wav`: Convenience function to create this block.
+    """
     def __init__(self, iring: Ring, path: Optional[str]=None, *args, **kwargs):
         super(WavSinkBlock, self).__init__(iring, *args, **kwargs)
         if path is None:
