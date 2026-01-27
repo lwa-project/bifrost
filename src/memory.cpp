@@ -193,19 +193,14 @@ public:
         return ::msync(data, _lengths[data], MS_ASYNC|MS_INVALIDATE);
     }
     void* memcpy(void* dest, void* src, BFsize count) {
-        ::memcpy(dest, src, count);
-        std::lock_guard<std::mutex> lock(_mutex);
-        if( this->is_mapped_nolock(dest) ) {
-            ::msync(dest, _lengths[dest], MS_ASYNC|MS_INVALIDATE);
-        }
-        return dest;
+        // Note: No explicit msync - the kernel handles dirty page writeback
+        // automatically, and MADV_SEQUENTIAL was set at allocation time.
+        return ::memcpy(dest, src, count);
     }
     void* memset(void* dest, int ch, BFsize count) {
+        // Note: No explicit msync - the kernel handles dirty page writeback
+        // automatically, and MADV_SEQUENTIAL was set at allocation time.
         ::memset(dest, ch, count);
-        std::lock_guard<std::mutex> lock(_mutex);
-        if( this->is_mapped_nolock(dest) ) {
-            ::msync(dest, _lengths[dest], MS_ASYNC|MS_INVALIDATE);
-        }
         return dest;
     }
     int free(void* data) {
