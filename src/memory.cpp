@@ -88,7 +88,7 @@ class MappedMgr {
     std::map<void*, int>         _fds;
     std::map<void*, BFsize>      _lengths;
     mutable std::mutex           _mutex;
-    std::atomic<size_t>          _alloc_count{0};  // Fast check for any allocations
+    std::atomic<size_t>          _mapped_alloc_count{0};  // Fast check for any allocations
     int                          _dir_lock_fd;  // Lock on our PID directory
 
     // Try to acquire exclusive lock on a PID directory (non-blocking)
@@ -178,12 +178,12 @@ public:
         return mm;
     }
     // Fast check without locking - use for early exit when no mapped allocations exist
-    inline bool has_allocations() const {
-        return _alloc_count.load(std::memory_order_relaxed) > 0;
+    inline bool has_mapped_allocs() const {
+        return _mapped_alloc_count.load(std::memory_order_relaxed) > 0;
     }
     inline bool is_mapped(void* data) const {
         // Fast path: if no allocations, definitely not mapped
-        if( !has_allocations() ) {
+        if( !has_mapped_allocs() ) {
             return false;
         }
         std::lock_guard<std::mutex> lock(_mutex);
@@ -195,11 +195,8 @@ public:
     }
     int alloc(void** data, BFsize size) {
         // Create
-        char tempname[256];
-        strcpy(tempname, _mapped_dir.c_str());
-        strcat(tempname, "/mmapXXXXXX");
-        int fd = ::mkstemp(tempname);
-        std::string filename = std::string(tempname);
+        std::string filename = _mapped_dir + "/mmapXXXXXX";
+        int fd = ::mkstemp(&filename[0]);
         if( fd < 0 ) {
             this->cleanup(filename, fd);
             return 1;
@@ -229,7 +226,7 @@ public:
             _fds[*data] = fd;
             _lengths[*data] = size;
         }
-        ++_alloc_count;
+        ++_mapped_alloc_count;
         return 0;
     }
     int sync(void* data) {
@@ -270,7 +267,7 @@ public:
         // Do cleanup outside the lock
         ::munmap(data, length);
         this->cleanup(filename, fd);
-        --_alloc_count;
+        --_mapped_alloc_count;
         return 0;
     }
 };
