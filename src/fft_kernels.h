@@ -95,6 +95,11 @@ inline BFstatus bifrost_status(cufftResult status) {
 		          bifrost_status(cufft_ret)); \
 	} while(0)
 
+/* 
+ * The addition of (packed,aligned(4)) is necessary for CUDA 12.0 callback
+ * compatibility despite the fact that the compiler warns about the int_fastdiv
+ * fields.  It's not clear to me way this attribute is needed but it works.
+ */
 struct __attribute__((packed,aligned(4))) CallbackData {
 	int ptr_offset;
 	int ndim;

@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <cstring> // For ::memcpy
+#include <cstdint>
 #include <cassert>
 
 #define BF_DTYPE_IS_COMPLEX(dtype) bool((dtype) & BF_DTYPE_COMPLEX_BIT)
@@ -210,7 +211,7 @@ byteswap(T value, T* result) {
 
 inline BFbool space_accessible_from(BFspace space, BFspace from) {
 #if !defined(BF_CUDA_ENABLED) || !BF_CUDA_ENABLED
-	return ( (space == BF_SPACE_SYSTEM) 
+	return ( (space == BF_SPACE_SYSTEM)
 		 || (space == BF_SPACE_MAPPED) );
 #else
 	switch( from ) {

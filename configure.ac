@@ -1,4 +1,4 @@
-AC_INIT([bifrost], [0.10.0], [], [], [https://github.com/ledatelescope/bifrost/])
+AC_INIT([bifrost], [0.10.0], [], [], [https://github.com/lwa-project/bifrost/])
 AC_LANG(C++)
 AC_CONFIG_SRCDIR([src/cuda.cpp])
 
@@ -26,10 +26,10 @@ AX_WITH_PROG(CTAGS, ctags)
 AS_IF([test x${CTAGS} = x],
       [AC_MSG_ERROR([Required program ctags was not found])],
       [])
-AC_MSG_CHECKING([whether ${CTAGS} is exuberant])
+AC_MSG_CHECKING([whether ${CTAGS} is sufficiently exuberant])
 AS_IF([! ${CTAGS} --version | grep -q Exuberant],
       [AC_MSG_RESULT([no])
-       AC_MSG_ERROR([exuberant ctags is required, but ${CTAGS} is a different version])],
+       AC_MSG_ERROR([exuberant/universal ctags is required, but ${CTAGS} is a different version])],
       [AC_MSG_RESULT([yes])])
 
 AC_SUBST(SO_EXT, $shrext_cmds)
@@ -92,21 +92,6 @@ AS_IF([test x$HAVE_HAVE_LONG_DOUBLE_WIDER = x1],
       [AC_SUBST([HAVE_FLOAT128], [0])])
 
 #
-# NUMA
-#
-
-AC_ARG_ENABLE([numa],
-              AS_HELP_STRING([--disable-numa],
-                             [disable numa support (default=no)]),
-              [enable_numa=no],
-              [enable_numa=yes])
-AC_SUBST([HAVE_NUMA], [0])
-AS_IF([test x$enable_numa != xno],
-      [AC_CHECK_LIB([numa], [numa_node_of_cpu],
-                    [AC_SUBST([HAVE_NUMA], [1])
-                     LIBS="$LIBS -lnuma"])])
-
-#
 # HWLOC
 #
 
@@ -138,6 +123,87 @@ AS_IF([test x$enable_vma != xno],
        AC_CHECK_LIB([vma], [vma_recvfrom_zcopy],
                     [AC_SUBST([HAVE_VMA], [1])
                      LIBS="$LIBS -lvma"])])
+
+#
+# Infiniband Verbs
+#
+
+AC_ARG_ENABLE([verbs],
+              AS_HELP_STRING([--disable-verbs],
+                             [disable Infiniband verbs support (default=no)]),
+              [enable_verbs=no],
+              [enable_verbs=yes])
+AC_SUBST([HAVE_VERBS], [0])
+AS_IF([test x$enable_verbs != xno],
+      [AC_CHECK_LIB([ibverbs], [ibv_query_device],
+                    [AC_SUBST([HAVE_VERBS], [1])
+                     LIBS="$LIBS -libverbs"])])
+
+ AC_ARG_WITH([rx-buffer-size],
+            [AS_HELP_STRING([--with-rx-buffer-size=N],
+                            [default Infiniband verbs receive buffer size in packets (default=8192)])],
+            [],
+            [with_rx_buffer_size=8192])
+ AC_SUBST([VERBS_NPKTBUF], [$with_rx_buffer_size])
+ AS_IF([test x$HAVE_VERBS = x0],
+       [AC_SUBST([VERBS_NPKTBUF], [0])])
+
+ AC_ARG_WITH([tx-buffer-size],
+            [AS_HELP_STRING([--with-tx-buffer-size=N],
+                            [default Infiniband verbs send buffer size in packets (default=512)])],
+            [],
+            [with_tx_buffer_size=512])
+ AC_SUBST([VERBS_SEND_NPKTBUF], [$with_tx_buffer_size])
+ AS_IF([test x$HAVE_VERBS = x0],
+       [AC_SUBST([VERBS_SEND_NPKTBUF], [0])])
+
+ AS_IF([test x$HAVE_VERBS != x0],
+       [AC_MSG_CHECKING([for Infiniband verbs packet pacing support])
+        AC_COMPILE_IFELSE([
+          AC_LANG_PROGRAM([[
+            #include <infiniband/verbs.h>]],
+          [[
+            int ndev, d;
+            ibv_device** ibv_dev_list = NULL;
+            ibv_context* ibv_ctx = NULL;
+            ibv_device_attr_ex ibv_dev_attr;
+            
+            ibv_dev_list = ibv_get_device_list(&ndev);
+            for(d=0; d<ndev; d++) {
+                ibv_ctx = ibv_open_device(ibv_dev_list[d]);
+                ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr);
+                ibv_is_qpt_supported(ibv_dev_attr.packet_pacing_caps.supported_qpts, IBV_QPT_RAW_PACKET);
+            }
+          ]])],
+          [AC_SUBST([VERBS_SEND_PACING], [1])
+           AC_MSG_RESULT([yes])],
+          [AC_SUBST([VERBS_SEND_PACING], [0])
+           AC_MSG_RESULT([no])])
+       ])
+
+#
+# RDMA
+#
+
+AC_ARG_ENABLE([rdma],
+              AS_HELP_STRING([--disable-rdma],
+                             [disable RDMA support (default=no)]),
+              [enable_rdma=no],
+              [enable_rdma=yes])
+AC_SUBST([HAVE_RDMA], [0])
+AS_IF([test x$enable_rdma != xno],
+      [AC_CHECK_LIB([rdmacm], [rdma_get_devices],
+                    [AC_SUBST([HAVE_RDMA], [1])
+                     LIBS="$LIBS -lrdmacm"])])
+
+AC_ARG_WITH([rdma_max_mem],
+            AS_HELP_STRING([--with-rdma-max-mem=N],
+                           [maximum RDMA buffer size in bytes (default=134217728)]),
+            [],
+            [with_rdma_max_mem=134217728])
+AC_SUBST([RDMA_MAXMEM], [$with_rdma_max_mem])
+AS_IF([test x$HAVE_RDMA = x0],
+      [AC_SUBST([RDMA_MAXMEM], [0])])
 
 #
 # CUDA
@@ -194,6 +260,10 @@ AC_SUBST([HAVE_TRACE], [0])
 AS_IF([test x$enable_trace != xno],
       [AC_SUBST([HAVE_TRACE], [1])])
 
+AX_CHECK_SSE
+AX_CHECK_AVX
+#AX_CHECK_AVX512
+AC_SUBST([HAVE_AVX512], [0])
 AX_CHECK_NATIVE_ARCH
 
 AC_ARG_ENABLE([cuda_debug],
@@ -222,6 +292,17 @@ AC_SUBST([HAVE_MAP_CACHE], [0])
 AS_IF([test x$enable_map_cache != xno],
       [AC_SUBST([HAVE_MAP_CACHE], [$HAVE_CUDA])])
 
+
+AC_ARG_WITH([map_cache_dir],
+            [AS_HELP_STRING([--with-map-cache-dir],
+                            [directory for the bifrost.map kernels (default=~/.bifrost)])],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="#define BF_MAP_KERNEL_DISK_CACHE_DIR \"$withval\""
+             with_map_cache_dir=$withval],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="/* BF_MAP_KERNEL_DISK_CACHE_DIR not defined - using default */"
+             with_map_cache_dir=0])
+AC_SUBST([BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE])
+AC_SUBST([MAP_CACHE_DIR], [$with_map_cache_dir])
+
 #
 # Python
 #
@@ -238,6 +319,13 @@ AS_IF([test x$enable_python != xno],
              [AC_PATH_PROG(PYTHON3, python3, no, $PATH)
               AS_IF([test x${PYTHON3} != xno],
                     [AC_SUBST([PYTHON], [$PYTHON3])])])
+       AS_IF([test x${PYTHON} != xno],
+             [AC_MSG_CHECKING([if $PYTHON is version 3.6 or later])
+              AS_IF([! ${PYTHON} -c "import sys; assert(sys.version_info >= (3,6,0))" 2>/dev/null],
+                    [AC_MSG_RESULT([no])
+                     AC_MSG_WARN([python module will not be built])
+                     AC_SUBST([PYTHON], [no])],
+                    [AC_MSG_RESULT([yes])])])
        AS_IF([test x${PYTHON} != xno],
              [AC_MSG_CHECKING([whether $PYTHON as ctypesgen])
               AS_IF([! ${PYTHON} -c "import ctypesgen" 2>/dev/null],
@@ -271,6 +359,7 @@ AS_IF([test x${DOCKER} != xno],
 # Documentation
 #
 
+DX_INIT_DOXYGEN([bifrost])
 DX_DOT_FEATURE(OFF)
 DX_HTML_FEATURE(ON)
 DX_CHM_FEATURE(OFF)
@@ -280,9 +369,27 @@ DX_RTF_FEATURE(OFF)
 DX_XML_FEATURE(OFF)
 DX_PDF_FEATURE(ON)
 DX_PS_FEATURE(ON)
-DX_INIT_DOXYGEN([bifrost])
 
-#
+AS_IF([test x${HAVE_PYTHON} == x1],
+      [AX_WITH_PROG(PYTHON_SPHINXB, sphinx-build)
+       AX_WITH_PROG(PYTHON_SPHINXA, sphinx-apidoc)
+       AX_WITH_PROG(PYTHON_BREATHE, breathe-apidoc)])
+
+AC_SUBST(HAVE_CXX_DOCS, 0)
+AC_SUBST(HAVE_PYTHON_DOCS, 0)
+AS_IF([test x${DX_DOXYGEN} == x],
+      [AC_MSG_WARN([missing doxygen, documentation cannot be built])],
+      [AC_SUBST(HAVE_CXX_DOCS, 1)
+       AS_IF([test x${PYTHON} != xno],
+             [AS_IF([test x${PYTHON_SPHINXB} = x],
+                    [AC_MSG_WARN([missing the sphinx-build, python documentation cannot not be built])],
+                    [AS_IF([test x${PYTHON_SPHINXA} = x],
+                            [AC_MSG_WARN([missing the sphinx-apidoc, python documentation cannot not be built])],
+                            [AS_IF([test x${PYTHON_BREATHE} = x],
+                                   [AC_MSG_WARN([missing the breathe-apidoc, python documentation cannot not be built])],
+                                   [AC_SUBST(HAVE_PYTHON_DOCS, 1)])])])])])
+
+
 # Version splitting
 #
 
@@ -346,8 +453,20 @@ AS_IF([test x$STDCXX_IS_SET != x1],
 
 CXXFLAGS="$CXXFLAGS $lt_prog_compiler_pic_CXX"
 NVCCFLAGS="$NVCCFLAGS -Xcompiler \"$lt_prog_compiler_pic_CXX\""
+LIBS="$LIBS $NVCCLIBS"
 
-AC_CONFIG_FILES([config.mk Makefile src/Makefile python/Makefile share/bifrost.pc src/bifrost/config.h])
+#
+# Additional CUDA flags
+#
+AC_SUBST([NVCC_GENCODE], [])
+AS_IF([test x$HAVE_CUDA != x0],
+      [NVCC_GENCODE=$(echo $GPU_ARCHS | ${SED} -e 's/\([[0-9]]\{2,3\}\)/-gencode arch=compute_\1,\\"code=sm_\1\\"/g;')
+       NVCC_GENCODE="$NVCC_GENCODE -gencode arch=compute_${GPU_MAX_ARCH},\\\"code=compute_${GPU_MAX_ARCH}\\\""
+       NVCCFLAGS="$NVCCFLAGS ${NVCC_GENCODE}"
+       CPPFLAGS="$CPPFLAGS -I$CUDA_HOME/include"
+      ])
+
+AC_CONFIG_FILES([config.mk Makefile src/Makefile python/Makefile docs/Makefile share/bifrost.pc src/bifrost/config.h])
 
 AC_OUTPUT
 
@@ -365,10 +484,6 @@ AS_IF([test x$HAVE_CUDA = x1],
       [AC_MSG_NOTICE(cuda: yes - v$CUDA_VERSION - $GPU_ARCHS - $with_stream_model streams)],
       [AC_MSG_NOTICE(cuda: no)])
 
-AS_IF([test x$HAVE_NUMA = x1],
-      [AC_MSG_NOTICE(numa: yes)],
-      [AC_MSG_NOTICE(numa: no)])
-
 AS_IF([test x$HAVE_HWLOC = x1],
       [AC_MSG_NOTICE(hwloc: yes)],
       [AC_MSG_NOTICE(hwloc: no)])
@@ -377,6 +492,14 @@ AS_IF([test x$HAVE_VMA = x1],
       [AC_MSG_NOTICE(libvma: yes)],
       [AC_MSG_NOTICE(libvma: no)])
 
+AS_IF([test x$HAVE_VERBS = x1],
+      [AC_MSG_NOTICE(libverbs: yes)],
+      [AC_MSG_NOTICE(libverbs: no)])
+
+AS_IF([test x$HAVE_RDMA = x1],
+      [AC_MSG_NOTICE(librdmacm: yes)],
+      [AC_MSG_NOTICE(librdmacm: no)])
+      
 AS_IF([test x$HAVE_PYTHON = x1],
       [AC_MSG_NOTICE(python bindings: yes)],
       [AC_MSG_NOTICE(python bindings: no)])
@@ -394,12 +517,20 @@ AS_IF([test x$enable_trace != xno],
       [AC_SUBST([OPTIONS], ["$OPTIONS trace"])])
 AS_IF([test x$enable_cuda_debug != xno],
       [AC_SUBST([OPTIONS], ["$OPTIONS cuda_debug"])])
+AS_IF([test x$HAVE_SSE != x0],
+      [AC_SUBST([OPTIONS], ["$OPTIONS sse"])])
+AS_IF([test x$HAVE_AVX != x0],
+      [AC_SUBST([OPTIONS], ["$OPTIONS avx"])])
+AS_IF([test x$HAVE_AVX512 != x0],
+      [AC_SUBST([OPTIONS], ["$OPTIONS avx512"])])
 AS_IF([test x$enable_native_arch != xno],
       [AC_SUBST([OPTIONS], ["$OPTIONS native"])])
 AS_IF([test x$HAVE_FLOAT128 != x0],
       [AC_SUBST([OPTIONS], ["$OPTIONS float128"])])
 AS_IF([test x$enable_map_cache != xno],
-      [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])
+      [AS_IF([test x$MAP_CACHE_DIR != x0],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache@$MAP_CACHE_DIR"])],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])])
 AC_MSG_NOTICE(options:$OPTIONS)
       
 echo ""

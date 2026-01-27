@@ -1,7 +1,6 @@
-#!/usr/bin/env python
 
-# Copyright (c) 2019, The Bifrost Authors. All rights reserved.
-# Copyright (c) 2019, The University of New Mexico. All rights reserved.
+# Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2019-2023, The University of New Mexico. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,7 +29,6 @@
 import unittest
 import os
 import re
-import imp
 import sys
 import glob
 
@@ -42,8 +40,6 @@ except ImportError:
 TEST_DIR = os.path.dirname(__file__)
 TOOLS_DIR = os.path.join(TEST_DIR, '..', 'tools')
 TESTBENCH_DIR = os.path.join(TEST_DIR, '..', 'testbench')
-modInfoBuild = imp.find_module('bifrost', [os.path.join(TEST_DIR, '..', 'python')])
-BIFROST_DIR =  os.path.abspath(modInfoBuild[1])
 
 run_scripts_tests = False
 try:
@@ -54,7 +50,7 @@ except ImportError:
     pass
 run_scripts_tests &= (sys.version_info[0] >= 3)
 
-_LINT_RE = re.compile('(?P<module>.*?)\:(?P<line>\d+)\: \[(?P<type>.*?)\] (?P<info>.*)')
+_LINT_RE = re.compile('(?P<module>.*?):(?P<line>[0-9]+): \[(?P<type>.*?)\] (?P<info>.*)')
 
 @unittest.skipUnless(run_scripts_tests, "requires the 'pylint' module")
 class ScriptTest(unittest.TestCase):
@@ -63,11 +59,7 @@ class ScriptTest(unittest.TestCase):
         
         pylint_output = StringIO()
         reporter = TextReporter(pylint_output)
-        try:
-            Run([script, '-E', '--extension-pkg-whitelist=numpy'], reporter=reporter, do_exit=False)
-        except TypeError:
-            # Python2 catch
-            Run([script, '-E', '--extension-pkg-whitelist=numpy'], reporter=reporter)
+        Run([script, '-E', '--extension-pkg-whitelist=numpy'], reporter=reporter, exit=False)
         out = pylint_output.getvalue()
         out_lines = out.split('\n')
         

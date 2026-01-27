@@ -102,7 +102,7 @@ the start allows useful metadata to propagate through the full pipeline,
 simplifying future blocks.
 
 Here is the source code for the
-`binary\_io <https://github.com/ledatelescope/bifrost/blob/master/python/bifrost/blocks/binary_io.py>`__
+`binary\_io <https://github.com/lwa-project/bifrost/blob/master/python/bifrost/blocks/binary_io.py>`__
 block to read from data saved using the useful ``numpy.tofile()``:
 
 .. code:: python
