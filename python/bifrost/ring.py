@@ -1,3 +1,46 @@
+"""Ring buffer implementation for streaming data between pipeline blocks.
+
+This module provides the core ring buffer data structure used in Bifrost
+pipelines.
+
+Memory Spaces
+-------------
+Ring buffers can be allocated in different memory spaces:
+
+- ``system``: Standard CPU memory (default)
+- ``cuda``: GPU device memory
+- ``cuda_host``: Pinned CPU memory for faster GPU transfers
+- ``cuda_managed``: Unified memory accessible from CPU and GPU
+- ``mapped``: Disk-backed memory via memory-mapped files
+
+The ``mapped`` space enables ring buffers larger than available RAM by
+backing the buffer with files on disk. This is useful for trigger systems
+requiring long look-back times (minutes to hours of data).
+
+.. note::
+
+   Mapped rings have significant performance limitations compared to RAM-based
+   rings:
+
+   - **Throughput**: Limited by disk I/O, typically 100-500 MB/s for SSDs vs
+     10+ GB/s for system memory. HDDs may only sustain 50-150 MB/s.
+   - **Latency**: Higher and more variable than RAM. Page faults when accessing
+     data not in the page cache can cause millisecond-scale stalls.
+   - **Access patterns**: Sequential access performs well; random access within
+     the buffer may thrash the page cache and severely degrade performance.
+   - **NUMA**: CPU core affinity (the ``core`` parameter) may not improve
+     locality for mapped memory as it does for system memory.
+
+   Mapped rings are best suited for:
+
+   - Moderate data rates (tens to low hundreds of MB/s)
+   - Long look-back requirements where RAM cost is prohibitive
+   - Trigger systems where occasional latency spikes are acceptable
+
+   The mapped ring directory defaults to ``/tmp/bifrost_mapped`` and can be
+   configured via the ``BIFROST_MAPPED_DIR`` environment variable or the
+   ``--with-mapped-ring-dir`` configure option.
+"""
 
 # Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 # Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
