@@ -50,7 +50,8 @@ AC_DEFUN([AX_CHECK_CUDA],
     LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
     NVCCLIBS="$LIBS -lcuda -lcudart"
     ac_ext="cu"
-
+    
+    # Test 1: Basic CUDA functionality (just CUDA headers)
     ac_link='$NVCC -o conftest$ac_exeext $NVCCFLAGS $LDFLAGS $LIBS conftest.$ac_ext >&5'
     AC_LINK_IFELSE([
       AC_LANG_PROGRAM([[
@@ -59,11 +60,11 @@ AC_DEFUN([AX_CHECK_CUDA],
           [[cudaMalloc(0, 0);]])],
         [],
         [AC_SUBST([HAVE_CUDA], [0])])
-    
+      
     if test "$HAVE_CUDA" = "1"; then
       LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
       NVCCLIBS="$NVCCLIBS -lcuda -lcudart"
-
+      
       ac_link='$NVCC -o conftest$ac_exeext $NVCCFLAGS $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext >&5'
       AC_LINK_IFELSE([
         AC_LANG_PROGRAM([[
@@ -79,6 +80,41 @@ AC_DEFUN([AX_CHECK_CUDA],
       AC_SUBST([HAVE_CUDA], [0])
     fi
     
+    CXXFLAGS="$CXXFLAGS_save"
+    LDFLAGS="$LDFLAGS_save"
+    NVCCLIBS="$NVCCLIBS_save"
+    ac_ext="$ac_ext_save"
+  fi
+  
+  # Test 2: CUDA/host compiler compatibility (with C++ standard library headers)
+  if test "$HAVE_CUDA" = "1"; then
+    AC_MSG_CHECKING([for nvcc/host compiler compatibility])
+    
+    CXXFLAGS_save="$CXXFLAGS"
+    LDFLAGS_save="$LDFLAGS"
+    NVCCLIBS_save="$NVCCLIBS"
+    ac_ext_save="$ac_ext"
+
+    LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
+    NVCCLIBS="$LIBS -lcuda -lcudart"
+    ac_ext="cu"
+
+    ac_link='$NVCC -o conftest$ac_exeext $NVCCFLAGS $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext >&5'
+    AC_LINK_IFELSE([
+      AC_LANG_PROGRAM([[
+          #include <cuda.h>
+          #include <cuda_runtime.h>
+          #include <algorithm>
+          #include <complex>
+          #include <limits>
+          #include <vector>]],
+          [[cudaMalloc(0, 0);]])],
+        [AC_MSG_RESULT(yes)],
+        [AC_MSG_RESULT(no)
+         AC_MSG_ERROR([CUDA was found but nvcc cannot compile with your host compiler's C++ standard library headers.
+Consider upgrading either your CUDA installation or host compiler.
+See config.log for detailed error messages.])])
+
     CXXFLAGS="$CXXFLAGS_save"
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
@@ -167,14 +203,17 @@ AC_DEFUN([AX_CHECK_CUDA],
     
     if test "$with_gpu_archs" = "auto"; then
       AC_MSG_CHECKING([which CUDA architectures to target])
-
+      
       CXXFLAGS_save="$CXXFLAGS"
       LDFLAGS_save="$LDFLAGS"
       NVCCLIBS_save="$NVCCLIBS"
       ac_ext_save="$ac_ext"
+      LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
       
       LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
       NVCCLIBS="-lcuda -lcudart"
+      LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+      export LD_LIBRARY_PATH
       ax_ext="cu"
       ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
       AC_RUN_IFELSE([
@@ -223,11 +262,12 @@ AC_DEFUN([AX_CHECK_CUDA],
                AC_MSG_RESULT([$GPU_ARCHS])
              fi],
             [AC_MSG_ERROR(failed to find any)])
-
+      
       CXXFLAGS="$CXXFLAGS_save"
       LDFLAGS="$LDFLAGS_save"
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
+      LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     else
       # Expand user-provided architectures to include base versions required by cuFFT pruning
       ar_expanded=""
@@ -238,7 +278,7 @@ AC_DEFUN([AX_CHECK_CUDA],
       ar_expanded=$( echo $ar_expanded | xargs -n1 | sort -n | uniq | xargs )
       AC_SUBST([GPU_ARCHS], [$ar_expanded])
     fi
-
+    
     AC_MSG_CHECKING([for valid requested CUDA architectures])
     ar_requested=$( echo "$GPU_ARCHS" | wc -w )
     ar_valid=$( echo $GPU_ARCHS $ar_supported | xargs -n1 | sort | uniq -d | xargs )
@@ -253,7 +293,7 @@ AC_DEFUN([AX_CHECK_CUDA],
     AC_SUBST([GPU_MIN_ARCH], [$ar_min_valid])
     ar_max_valid=$(echo $ar_valid | ${SED} -e 's/.* //g;' )
     AC_SUBST([GPU_MAX_ARCH], [$ar_max_valid])
-
+    
     AC_ARG_WITH([shared_mem],
            [AS_HELP_STRING([--with-shared-mem=N],
                            [default GPU shared memory per block in bytes (default=detect)])],
@@ -261,14 +301,17 @@ AC_DEFUN([AX_CHECK_CUDA],
            [with_shared_mem='auto'])
     if test "$with_shared_mem" = "auto"; then
       AC_MSG_CHECKING([for minimum shared memory per block])
-
+      
       CXXFLAGS_save="$CXXFLAGS"
       LDFLAGS_save="$LDFLAGS"
       NVCCLIBS_save="$NVCCLIBS"
       ac_ext_save="$ac_ext"
+      LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
       
       LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
       NVCCLIBS="-lcuda -lcudart"
+      LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+      export LD_LIBRARY_PATH
       ac_ext="cu"
       ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS conftest.$ac_ext>&5'
       AC_RUN_IFELSE([
@@ -304,11 +347,12 @@ AC_DEFUN([AX_CHECK_CUDA],
             [AC_SUBST([GPU_SHAREDMEM], [`cat confsmem.out`])
              AC_MSG_RESULT([$GPU_SHAREDMEM B])],
             [AC_MSG_ERROR(failed to determine a value)])
-
+      
       CXXFLAGS="$CXXFLAGS_save"
       LDFLAGS="$LDFLAGS_save"
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
+      LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     else
       AC_SUBST([GPU_SHAREDMEM], [$with_shared_mem])
     fi
@@ -328,9 +372,12 @@ AC_DEFUN([AX_CHECK_CUDA],
     LDFLAGS_save="$LDFLAGS"
     NVCCLIBS_save="$NVCCLIBS"
     ac_ext_save="$ac_ext"
+    LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
     
     LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
     NVCCLIBS="-lcuda -lcudart"
+    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH
     ac_ext="cu"
     ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
     AC_RUN_IFELSE([
@@ -343,20 +390,24 @@ AC_DEFUN([AX_CHECK_CUDA],
            AC_MSG_RESULT([full])],
           [AC_SUBST([GPU_EXP_PINNED_ALLOC], [1])
            AC_MSG_RESULT([experimental])])
-
+    
     CXXFLAGS="$CXXFLAGS_save"
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
     ac_ext="$ac_ext_save"
+    LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     
     AC_MSG_CHECKING([for header-only NVTX version])
     CXXFLAGS_save="$CXXFLAGS"
     LDFLAGS_save="$LDFLAGS"
     NVCCLIBS_save="$NVCCLIBS"
     ac_ext_save="$ac_ext"
-
+    LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
+    
     LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
     NVCCLIBS="-lcuda -lcudart -lnvToolsExt"
+    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH
     ac_ext="cu"
     ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
     AC_RUN_IFELSE([
@@ -370,11 +421,12 @@ AC_DEFUN([AX_CHECK_CUDA],
            AC_MSG_RESULT([no])],
           [AC_SUBST([GPU_HEADERONLY_NVTX], [1])
            AC_MSG_RESULT([yes])])
-
+    
     CXXFLAGS="$CXXFLAGS_save"
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
     ac_ext="$ac_ext_save"
+    LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     
   else
      AC_SUBST([GPU_PASCAL_MANAGEDMEM], [0])
