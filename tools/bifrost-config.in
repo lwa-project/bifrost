@@ -1,0 +1,162 @@
+#!/bin/bash
+#
+# bifrost-config - Report Bifrost build configuration
+#
+# Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2016-2026, The University of New Mexico. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# * Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+# * Neither the name of The Bifrost Authors nor the names of its
+#   contributors may be used to endorse or promote products derived
+#   from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# Installation paths (using same pattern as pkg-config)
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+includedir="@includedir@"
+libdir="@libdir@"
+
+usage() {
+    cat <<'USAGE_EOF'
+Usage: bifrost-config [OPTIONS]
+
+Options:
+  --help          Show this help message
+  --version       Print Bifrost version
+
+Paths:
+  --prefix        Print install prefix
+  --includedir    Print include directory
+  --libdir        Print library directory
+
+Compilation (C/C++):
+  --cxx           Print C++ compiler used to build Bifrost
+  --cflags        Print C/C++ compiler flags (includes + flags)
+  --cppflags      Print C preprocessor flags
+  --cxxflags      Print C++ compiler flags
+  --ldflags       Print linker flags
+  --libs          Print libraries to link
+
+CUDA (if enabled):
+  --have-cuda     Print yes if CUDA support is enabled, no otherwise
+  --nvcc          Print path to nvcc compiler
+  --nvccflags     Print NVCC compiler flags (includes gencode flags)
+  --cuda-home     Print CUDA installation path
+  --gpu-archs     Print target GPU architectures
+
+Multiple options can be combined, e.g.:
+  bifrost-config --cflags --ldflags --libs
+USAGE_EOF
+}
+
+if [ $# -eq 0 ]; then
+    usage
+    exit 1
+fi
+
+# Values are output via heredocs to avoid quoting issues with
+# complex flag strings that may contain embedded quotes
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            usage
+            exit 0
+            ;;
+        --version)
+            cat <<'EOF'
+@PACKAGE_VERSION@
+EOF
+            ;;
+        --prefix)
+            echo "${prefix}"
+            ;;
+        --includedir)
+            echo "${includedir}"
+            ;;
+        --libdir)
+            echo "${libdir}"
+            ;;
+        --cxx)
+            cat <<'EOF'
+@CXX@
+EOF
+            ;;
+        --cflags)
+            cat <<EOF
+-I${includedir} @CXXFLAGS@
+EOF
+            ;;
+        --cppflags)
+            cat <<EOF
+@CPPFLAGS@
+EOF
+            ;;
+        --cxxflags)
+            cat <<EOF
+@CXXFLAGS@
+EOF
+            ;;
+        --ldflags)
+            cat <<EOF
+-L${libdir} @LDFLAGS@
+EOF
+            ;;
+        --libs)
+            cat <<EOF
+-lbifrost @LIBS@
+EOF
+            ;;
+        --have-cuda)
+            if [ "@HAVE_CUDA@" = "1" ]; then
+                echo "yes"
+            else
+                echo "no"
+            fi
+            ;;
+        --nvcc)
+            cat <<'EOF'
+@NVCC@
+EOF
+            ;;
+        --nvccflags)
+            cat <<EOF
+@NVCCFLAGS@
+EOF
+            ;;
+        --cuda-home)
+            cat <<'EOF'
+@CUDA_HOME@
+EOF
+            ;;
+        --gpu-archs)
+            cat <<'EOF'
+@GPU_ARCHS@
+EOF
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
