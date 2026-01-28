@@ -21933,6 +21933,7 @@ printf %s "checking for a working CUDA 10+ installation... " >&6; }
     NVCCLIBS="$LIBS -lcuda -lcudart"
     ac_ext="cu"
 
+    # Test 1: Basic CUDA functionality (just CUDA headers)
     ac_link='$NVCC -o conftest$ac_exeext $NVCCFLAGS $LDFLAGS $LIBS conftest.$ac_ext >&5'
     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -21998,6 +21999,60 @@ printf "%s\n" "no" >&6; }
       HAVE_CUDA=0
 
     fi
+
+    CXXFLAGS="$CXXFLAGS_save"
+    LDFLAGS="$LDFLAGS_save"
+    NVCCLIBS="$NVCCLIBS_save"
+    ac_ext="$ac_ext_save"
+  fi
+
+  # Test 2: CUDA/host compiler compatibility (with C++ standard library headers)
+  if test "$HAVE_CUDA" = "1"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for nvcc/host compiler compatibility" >&5
+printf %s "checking for nvcc/host compiler compatibility... " >&6; }
+
+    CXXFLAGS_save="$CXXFLAGS"
+    LDFLAGS_save="$LDFLAGS"
+    NVCCLIBS_save="$NVCCLIBS"
+    ac_ext_save="$ac_ext"
+
+    LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
+    NVCCLIBS="$LIBS -lcuda -lcudart"
+    ac_ext="cu"
+
+    ac_link='$NVCC -o conftest$ac_exeext $NVCCFLAGS $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext >&5'
+    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+          #include <cuda.h>
+          #include <cuda_runtime.h>
+          #include <algorithm>
+          #include <complex>
+          #include <limits>
+          #include <vector>
+int
+main (void)
+{
+cudaMalloc(0, 0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"
+then :
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }
+else case e in #(
+  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; }
+         as_fn_error $? "CUDA was found but nvcc cannot compile with your host compiler's C++ standard library headers.
+Consider upgrading either your CUDA installation or host compiler.
+See config.log for detailed error messages." "$LINENO" 5 ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
 
     CXXFLAGS="$CXXFLAGS_save"
     LDFLAGS="$LDFLAGS_save"
@@ -22124,9 +22179,12 @@ printf %s "checking which CUDA architectures to target... " >&6; }
       LDFLAGS_save="$LDFLAGS"
       NVCCLIBS_save="$NVCCLIBS"
       ac_ext_save="$ac_ext"
+      LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
 
       LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
       NVCCLIBS="-lcuda -lcudart"
+      LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+      export LD_LIBRARY_PATH
       ax_ext="cu"
       ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
       if test "$cross_compiling" = yes
@@ -22209,6 +22267,7 @@ fi
       LDFLAGS="$LDFLAGS_save"
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
+      LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     else
       # Expand user-provided architectures to include base versions required by cuFFT pruning
       ar_expanded=""
@@ -22258,9 +22317,12 @@ printf %s "checking for minimum shared memory per block... " >&6; }
       LDFLAGS_save="$LDFLAGS"
       NVCCLIBS_save="$NVCCLIBS"
       ac_ext_save="$ac_ext"
+      LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
 
       LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
       NVCCLIBS="-lcuda -lcudart"
+      LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+      export LD_LIBRARY_PATH
       ac_ext="cu"
       ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS conftest.$ac_ext>&5'
       if test "$cross_compiling" = yes
@@ -22329,6 +22391,7 @@ fi
       LDFLAGS="$LDFLAGS_save"
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
+      LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
     else
       GPU_SHAREDMEM=$with_shared_mem
 
@@ -22355,9 +22418,12 @@ printf %s "checking for thrust pinned allocated support... " >&6; }
     LDFLAGS_save="$LDFLAGS"
     NVCCLIBS_save="$NVCCLIBS"
     ac_ext_save="$ac_ext"
+    LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
 
     LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
     NVCCLIBS="-lcuda -lcudart"
+    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH
     ac_ext="cu"
     ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
     if test "$cross_compiling" = yes
@@ -22405,6 +22471,7 @@ fi
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
     ac_ext="$ac_ext_save"
+    LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
 
     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for header-only NVTX version" >&5
 printf %s "checking for header-only NVTX version... " >&6; }
@@ -22412,9 +22479,12 @@ printf %s "checking for header-only NVTX version... " >&6; }
     LDFLAGS_save="$LDFLAGS"
     NVCCLIBS_save="$NVCCLIBS"
     ac_ext_save="$ac_ext"
+    LD_LIBRARY_PATH_save="$LD_LIBRARY_PATH"
 
     LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
     NVCCLIBS="-lcuda -lcudart -lnvToolsExt"
+    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH
     ac_ext="cu"
     ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
     if test "$cross_compiling" = yes
@@ -22463,6 +22533,7 @@ fi
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
     ac_ext="$ac_ext_save"
+    LD_LIBRARY_PATH="$LD_LIBRARY_PATH_save"
 
   else
      GPU_PASCAL_MANAGEDMEM=0
