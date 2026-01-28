@@ -5,6 +5,8 @@ INC_DIR = ../src
 
 BIFROST_PYTHON_VERSION_FILE  = bifrost/version/__init__.py
 BIFROST_PYTHON_BINDINGS_FILE = bifrost/libbifrost_generated.py
+BIFROST_PYTHON_DOCS_FILE     = bifrost/libbifrost_generated_docs.py
+DOXYGEN_XML_DIR              = ../docs/doxygen/xml
 
 PSRHOME ?= /usr/local
 PSRDADA_PYTHON_BINDINGS_FILE = bifrost/libpsrdada_generated.py
@@ -39,6 +41,16 @@ define run_typehinting
   @PYTHON@ -c 'from typehinting import build_typehinting; build_typehinting("$@")'
 endef
 
+define run_doxygen_pydoc
+	# Generate docstrings from Doxygen XML (if available)
+	@if [ -d "$(DOXYGEN_XML_DIR)" ]; then \
+		@PYTHON@ doxygen_to_pydoc.py --xml-dir $(DOXYGEN_XML_DIR) --output $@; \
+	else \
+		echo "Note: Doxygen XML not found, skipping docstring generation"; \
+		echo "DOCSTRINGS = {}" > $@; \
+	fi
+endef
+
 ifeq "$(wildcard $(PSRDADA_HEADERS))" ""
 PSRDADA_PYTHON_BINDINGS_FILE =
 endif
@@ -53,7 +65,10 @@ $(BIFROST_PYTHON_BINDINGS_FILE): $(INC_DIR)/bifrost/*.h
 	$(call run_ctypesgen,$(BIFROST_NAME),$(INC_DIR))
 	$(call run_typehinting,$(BIFROST_NAME),$(INC_DIR))
 
-build: bifrost/*.py Makefile $(BIFROST_PYTHON_VERSION_FILE) $(BIFROST_PYTHON_BINDINGS_FILE) $(PSRDADA_PYTHON_BINDINGS_FILE)
+$(BIFROST_PYTHON_DOCS_FILE): doxygen_to_pydoc.py
+	$(call run_doxygen_pydoc)
+
+build: bifrost/*.py Makefile $(BIFROST_PYTHON_VERSION_FILE) $(BIFROST_PYTHON_BINDINGS_FILE) $(BIFROST_PYTHON_DOCS_FILE) $(PSRDADA_PYTHON_BINDINGS_FILE)
 	@PYTHON@ setup.py build @PYBUILDFLAGS@
 .PHONY: build
 
@@ -76,6 +91,7 @@ clean:
 	@PYTHON@ setup.py clean --all
 	rm -f $(BIFROST_PYTHON_VERSION_FILE)
 	rm -f $(BIFROST_PYTHON_BINDINGS_FILE)
+	rm -f $(BIFROST_PYTHON_DOCS_FILE)
 	rm -f $(PSRDADA_PYTHON_BINDINGS_FILE)
 .PHONY: clean
 

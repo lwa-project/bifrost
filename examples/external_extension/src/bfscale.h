@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,40 +26,44 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*! \file io.h
- *  \brief I/O method and seek constants
+/*
+ * Example Bifrost extension: bfScale
  *
- *  This module defines enumerations for I/O methods and file seek operations
- *  used by packet capture and other I/O functionality.
+ * Demonstrates how to create an external C extension that links against
+ * libifrost and operates on BFarray data.
  */
 
-#ifndef BF_IO_H_INCLUDE_GUARD_
-#define BF_IO_H_INCLUDE_GUARD_
+#ifndef BFSCALE_H_INCLUDE_GUARD_
+#define BFSCALE_H_INCLUDE_GUARD_
 
-#include <unistd.h>
+#include <bifrost/common.h>
+#include <bifrost/array.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*! \brief I/O method types for packet capture */
-typedef enum BFiomethod_ {
-    BF_IO_GENERIC = 0,  /*!< Generic I/O (default) */
-    BF_IO_DISK    = 1,  /*!< Disk file I/O */
-    BF_IO_UDP     = 2,  /*!< UDP socket I/O */
-    BF_IO_SNIFFER = 3,  /*!< Raw socket sniffer I/O */
-    BF_IO_VERBS   = 4   /*!< Infiniband Verbs I/O */
-} BFiomethod;
+/*! \brief Scale array elements by a constant factor
+ *
+ *  Computes: out[i] = in[i] * scale for all elements
+ *
+ *  \param in     Input array (must be float32)
+ *  \param out    Output array (must be float32, same shape as input)
+ *  \param scale  Scale factor to apply
+ *  \return BF_STATUS_SUCCESS on success, error code otherwise
+ */
+BFstatus bfScale(BFarray const* in, BFarray* out, float scale);
 
-/*! \brief File seek origin constants */
-typedef enum BFiowhence_ {
-    BF_WHENCE_SET = SEEK_SET,  /*!< Seek from beginning of file */
-    BF_WHENCE_CUR = SEEK_CUR,  /*!< Seek from current position */
-    BF_WHENCE_END = SEEK_END   /*!< Seek from end of file */
-} BFiowhence;
+/*! \brief Get the version of this extension
+ *
+ *  \param major  Pointer to store major version
+ *  \param minor  Pointer to store minor version
+ *  \return BF_STATUS_SUCCESS
+ */
+BFstatus bfScaleGetVersion(int* major, int* minor);
 
 #ifdef __cplusplus
-} // extern "C"
+}
 #endif
 
-#endif // BF_IO_H_INCLUDE_GUARD_
+#endif // BFSCALE_H_INCLUDE_GUARD_

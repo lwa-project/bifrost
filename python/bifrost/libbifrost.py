@@ -40,6 +40,22 @@ import bifrost.libbifrost_typehints as _th
 bf = _bf # Public access to library
 th = _th # Public access to type hints
 
+# Apply auto-generated docstrings from C headers (if available)
+try:
+    from bifrost.libbifrost_generated_docs import DOCSTRINGS as _BF_DOCSTRINGS
+    
+    for name, docstring in _BF_DOCSTRINGS.items():
+        func = getattr(_bf, name, None)
+        if func is not None and callable(func):
+            try:
+                func.__doc__ = docstring
+            except (AttributeError, TypeError):
+                # Some objects may not allow setting __doc__
+                pass
+
+except ImportError:
+    pass
+
 from typing import Any, Callable
 
 from bifrost import telemetry

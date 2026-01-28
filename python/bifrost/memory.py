@@ -35,6 +35,25 @@ from bifrost import telemetry
 telemetry.track_module()
 
 def space_accessible(space: str, from_spaces: List[str]) -> bool:
+    """Check if data in a memory space is accessible from other spaces.
+
+    Determines whether data stored in ``space`` can be directly accessed
+    by code running in any of ``from_spaces`` without requiring an
+    explicit copy operation.
+
+    Args:
+        space: The memory space where the data resides.
+            One of 'system', 'cuda', 'cuda_host', or 'cuda_managed'.
+        from_spaces: Memory spaces from which access is attempted,
+            or 'any' to indicate access from any space.
+
+    Returns:
+        bool: True if data in ``space`` is accessible from ``from_spaces``.
+
+    Example:
+        >>> space_accessible('cuda_host', ['system'])  # True (pinned memory is CPU-accessible)
+        >>> space_accessible('cuda', ['system'])  # False (GPU memory requires copy)
+    """
     if from_spaces == 'any': # TODO: This is a little bit hacky
         return True
     from_spaces = set(from_spaces)
@@ -48,14 +67,49 @@ def space_accessible(space: str, from_spaces: List[str]) -> bool:
         return False
 
 def raw_malloc(size: int, space: str) -> int:
+    """Allocate raw memory in the specified memory space.
+
+    This is a low-level function. Prefer using ndarray for most use cases.
+
+    Args:
+        size: Number of bytes to allocate.
+        space: Memory space for allocation. One of 'system', 'cuda',
+            'cuda_host', or 'cuda_managed'.
+
+    Returns:
+        int: Pointer to the allocated memory.
+
+    Raises:
+        RuntimeError: If allocation fails.
+    """
     ptr = ctypes.c_void_p()
     _check(_bf.bfMalloc(ptr, size, _string2space(space)))
     return ptr.value
-def raw_free(ptr: int, space: str='auto') -> int:
+def raw_free(ptr: int, space: str='auto'):
+    """Free memory previously allocated with raw_malloc.
+
+    Args:
+        ptr: Pointer to memory to free.
+        space: Memory space of the allocation. Use 'auto' to automatically
+            detect the space.
+    """
     _check(_bf.bfFree(ptr, _string2space(space)))
 def raw_get_space(ptr: int) -> _bf.BFspace:
+    """Get the memory space of an allocated pointer.
+
+    Args:
+        ptr: Pointer to query.
+
+    Returns:
+        BFspace: The memory space constant for this pointer.
+    """
     return _get(_bf.bfGetSpace, ptr)
 
 def alignment() -> int:
+    """Get the memory alignment used by Bifrost allocations.
+
+    Returns:
+        int: The alignment in bytes (typically 4096 for page alignment).
+    """
     ret, _ = _bf.bfGetAlignment()
     return ret

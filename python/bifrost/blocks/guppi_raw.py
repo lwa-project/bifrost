@@ -38,6 +38,18 @@ def _mjd2unix(mjd):
     return (mjd - 40587) * 86400
 
 class GuppiRawSourceBlock(SourceBlock):
+    """Block that reads GUPPI raw voltage files.
+
+    Reads raw voltage data in GUPPI format (used by Green Bank and other
+    radio telescopes). Each file becomes a separate sequence.
+
+    Args:
+        sourcenames: List of input file paths.
+        gulp_nframe: Number of GUPPI blocks to read per gulp.
+
+    See Also:
+        :func:`read_guppi_raw`: Convenience function to create this block.
+    """
     def __init__(self, sourcenames, gulp_nframe=1, *args, **kwargs):
         super(GuppiRawSourceBlock, self).__init__(sourcenames,
                                                   gulp_nframe=gulp_nframe,

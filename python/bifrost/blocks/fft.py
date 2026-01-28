@@ -36,6 +36,27 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class FftBlock(TransformBlock):
+    """Block that applies GPU-accelerated Fast Fourier Transform.
+
+    Computes N-dimensional FFT over specified axes. The transform cannot
+    include the frame axis; use ``bifrost.views.split_axis`` first to
+    reshape if needed.
+
+    Supports real-to-complex, complex-to-real, and complex-to-complex
+    transforms. Axis scales are automatically updated to reflect the
+    Fourier-transformed axes.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space.
+        axes: List of axis indices or labels to transform.
+        inverse: If True, compute inverse FFT.
+        real_output: If True, compute complex-to-real inverse FFT.
+        axis_labels: New labels for transformed axes.
+        apply_fftshift: If True, shift zero-frequency to center.
+
+    See Also:
+        :func:`fft`: Convenience function to create this block.
+    """
     # TODO: Add support for sizes (aka 's') parameter that defines transform
     #         length in each dimension (i.e., cropped/padded transforms).
     #         Should be able to do this using an input callback and padded

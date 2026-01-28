@@ -36,6 +36,29 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class FdmtBlock(TransformBlock):
+    """Block that applies the Fast Dispersion Measure Transform.
+
+    Transforms frequency-time data into dispersion-time data, enabling
+    efficient search over a range of dispersion measures. Used for pulsar
+    and fast radio burst (FRB) searching.
+
+    Based on Zackay & Ofek (2014) algorithm.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space with
+            axes [..., 'freq', 'time'].
+        max_dm: Maximum dispersion measure in pc/cm^3.
+        max_delay: Maximum dispersion delay in time samples.
+        max_diagonal: Maximum dispersion delay as fraction of channels.
+        exponent: Frequency power law (default -2.0 for ISM dispersion).
+        negative_delays: If True, search negative DM range.
+
+    Note:
+        Exactly one of max_dm, max_delay, or max_diagonal must be specified.
+
+    See Also:
+        :func:`fdmt`: Convenience function to create this block.
+    """
     def __init__(self, iring, max_dm=None, max_delay=None, max_diagonal=None,
                  exponent=-2.0, negative_delays=False,
                  *args, **kwargs):

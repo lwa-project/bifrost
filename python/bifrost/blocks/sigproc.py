@@ -49,6 +49,20 @@ def _unix2mjd(unix):
     return unix / 86400. + 40587
 
 class SigprocSourceBlock(SourceBlock):
+    """Block that reads SIGPROC-format data files.
+
+    Reads filterbank (.fil), time series (.tim), and dedispersed subband
+    files in SIGPROC format. Each file becomes a separate sequence in
+    the output ring.
+
+    Args:
+        filenames: List of input file paths.
+        gulp_nframe: Number of time samples to read per gulp.
+        unpack: If True, unpack 1-4 bit data to 8 bits.
+
+    See Also:
+        :func:`read_sigproc`: Convenience function to create this block.
+    """
     def __init__(self, filenames: List[str], gulp_nframe: int, unpack: bool=True, *args, **kwargs):
         super(SigprocSourceBlock, self).__init__(filenames, gulp_nframe, *args, **kwargs)
         self.unpack = unpack
@@ -160,6 +174,26 @@ def _copy_item_if_exists(dst, src, key, newkey=None):
         dst[newkey] = src[key]
 
 class SigprocSinkBlock(SinkBlock):
+    """Block that writes data to SIGPROC-format files.
+
+    Writes filterbank, time series, or pulse profile files depending on
+    the input tensor shape and labels. Each sequence produces one or more
+    output files named after the sequence.
+
+    Supported formats:
+        - ``[time, pol, freq]``: Filterbank file
+        - ``[beam, time, pol, freq]``: Filterbank file per beam
+        - ``[time, pol]``: Time series file
+        - ``[dispersion, time, pol]``: Time series file per DM trial
+        - ``[pol, freq, phase]``: Pulse profile file per frame
+
+    Args:
+        iring: Input ring or block.
+        path: Output directory path. If None, uses current directory.
+
+    See Also:
+        :func:`write_sigproc`: Convenience function to create this block.
+    """
     def __init__(self, iring: Ring, path: Optional[str]=None, *args, **kwargs):
         super(SigprocSinkBlock, self).__init__(iring, *args, **kwargs)
         if path is None:

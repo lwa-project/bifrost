@@ -39,6 +39,20 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class QuantizeBlock(TransformBlock):
+    """Block that changes data precision with scaling.
+
+    Converts data to a different dtype, applying a scale factor before
+    quantization. Useful for reducing data volume by converting floating
+    point to lower-precision integers.
+
+    Args:
+        iring: Input ring or block.
+        dtype: Output data type (e.g., 'i8', 'u8') or number of bits.
+        scale: Scale factor applied before quantization (output = input * scale).
+
+    See Also:
+        :func:`quantize`: Convenience function to create this block.
+    """
     def __init__(self, iring: Ring, dtype: Union[str,np.dtype], scale: float=1.,
                  *args, **kwargs):
         super(QuantizeBlock, self).__init__(iring, *args, **kwargs)

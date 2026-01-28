@@ -35,6 +35,21 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class Address(BifrostObject):
+    """Network address representation for UDP I/O.
+
+    Address encapsulates a network address (IP + port) for use with
+    Bifrost's UDP capture and transmit functionality.
+
+    Args:
+        address: IP address string (e.g., '192.168.1.1').
+        port: UDP port number.
+        family: Address family. If None, auto-detected from the address string.
+
+    Example:
+        >>> addr = Address('224.0.0.1', 4015)  # Multicast address
+        >>> print(addr.is_multicast)  # True
+        >>> print(addr.mtu)  # Maximum transmission unit
+    """
     def __init__(self, address: str, port: int, family: Optional[AddressFamily]=None):
         address = address.encode()
         assert(isinstance(port, int))

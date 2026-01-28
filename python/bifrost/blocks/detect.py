@@ -36,6 +36,26 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class DetectBlock(TransformBlock):
+    """Block that applies square-law detection to form polarization products.
+
+    Converts complex voltage data to real power or polarization products.
+    Supports multiple detection modes for different polarization representations.
+
+    Args:
+        iring: Input ring or block. Must be complex type in CUDA space.
+        mode: Detection mode:
+
+            - ``'scalar'``: Single-pol magnitude squared
+            - ``'jones'``: Dual-pol Jones matrix elements
+            - ``'stokes'``: Stokes I, Q, U, V parameters
+            - ``'stokes_i'``: Stokes I only (total intensity)
+            - ``'coherence'``: Coherence matrix elements
+
+        axis: Polarization axis (index or label). Defaults to 'pol'.
+
+    See Also:
+        :func:`detect`: Convenience function to create this block.
+    """
     def __init__(self, iring, mode: str, axis: Optional[Union[int,str]] = None,
                  *args, **kwargs):
         super(DetectBlock, self).__init__(iring, *args, **kwargs)
