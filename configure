@@ -1586,7 +1586,7 @@ Optional Packages:
                           compiler's sysroot if not specified).
   --with-ctags=[PATH]   absolute path to ctags executable
   --with-rx-buffer-size=N default Infiniband verbs receive buffer size in
-                          packets (default=16384)
+                          packets (default=32768)
   --with-verbs-wcbatch=N  default Infiniband verbs completion queue batch size
                           (default=64)
   --with-tx-buffer-size=N default Infiniband verbs send buffer size in packets
@@ -21553,7 +21553,7 @@ if test ${with_rx_buffer_size+y}
 then :
   withval=$with_rx_buffer_size;
 else case e in #(
-  e) with_rx_buffer_size=16384 ;;
+  e) with_rx_buffer_size=32768 ;;
 esac
 fi
 

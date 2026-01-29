@@ -141,9 +141,9 @@ AS_IF([test x$enable_verbs != xno],
 
  AC_ARG_WITH([rx-buffer-size],
             [AS_HELP_STRING([--with-rx-buffer-size=N],
-                            [default Infiniband verbs receive buffer size in packets (default=16384)])],
+                            [default Infiniband verbs receive buffer size in packets (default=32768)])],
             [],
-            [with_rx_buffer_size=16384])
+            [with_rx_buffer_size=32768])
  AC_SUBST([VERBS_NPKTBUF], [$with_rx_buffer_size])
  AS_IF([test x$HAVE_VERBS = x0],
        [AC_SUBST([VERBS_NPKTBUF], [0])])

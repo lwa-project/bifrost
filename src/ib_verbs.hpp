@@ -51,7 +51,7 @@
 #endif
 
 #ifndef BF_VERBS_NPKTBUF
-#define BF_VERBS_NPKTBUF 16384
+#define BF_VERBS_NPKTBUF 32768
 #endif
 
 #ifndef BF_VERBS_WCBATCH
