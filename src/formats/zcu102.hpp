@@ -162,14 +162,17 @@ public:
             //if((pol_offset_out == 0) && (pkt_chan==0) && ((pkt->seq % 120)==0) ){
             //   fprintf(stderr, "nsrc: %d seq: %d, dest_p: %p obuf idx %d, obuf offset %lu, nseq_per_obuf %d, seq0 %d, nbuf: %d\n", pkt->nsrc, pkt->seq, dest_p, obuf_idx, obuf_offset, nseq_per_obuf, seq0, nbuf);
             //}
-            for(c=0; c<pkt->nchan; c++) {
+            for(c=0; c<pkt->nchan; c+=2) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               _mm256_stream_si256(dest_p, _mm256_loadu_si256(src_p));
-               src_p += words_per_chan_out;
-               dest_p += words_per_chan_out;
+               _mm256_stream_si256(dest_p+0*words_per_chan_out, _mm256_loadu_si256(src_p+0*words_per_chan_out));
+               _mm256_stream_si256(dest_p+1*words_per_chan_out, _mm256_loadu_si256(src_p+1*words_per_chan_out));
+               src_p += 2*words_per_chan_out;
+               dest_p += 2*words_per_chan_out;
 #else
-               ::memcpy(out + (words_per_chan_out * (pkt_chan + c)) + pol_offset_out,
-                        (uint8_t*)in + c * pkt->npol, pkt->npol);
+               ::memcpy(out + (words_per_chan_out * (pkt_chan + c + 0)) + pol_offset_out,
+                        (uint8_t*)in + (c + 0) * pkt->npol, pkt->npol);
+               ::memcpy(out + (words_per_chan_out * (pkt_chan + c + 1)) + pol_offset_out,
+                        (uint8_t*)in + (c + 1) * pkt->npol, pkt->npol);
 #endif
             }
     }
