@@ -130,7 +130,7 @@ BFstatus bfTypeInfo(BFdtype dtype, BFdtype_info* info); {
 typedef struct BFarray_ {
 	void*    data;                 /*!< Pointer to array data */
 	BFspace  space;                /*!< Memory space (system, cuda, etc.) */
-	BFdtype  dtype;                /*!< Data type encoding */
+	BFdtype  dtype;                /*!< Data type (i8, f32, cf32, etc.) */
 	int      ndim;                 /*!< Number of dimensions (max BF_MAX_DIMS) */
 	long     shape[BF_MAX_DIMS];   /*!< Shape in elements per dimension */ // Elements
 	long     strides[BF_MAX_DIMS]; /*!< Strides in bytes per dimension */ // Bytes
