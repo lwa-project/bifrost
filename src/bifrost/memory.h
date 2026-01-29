@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2019, The Bifrost Authors. All rights reserved.
  * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,8 @@ typedef enum BFspace_ {
 	BF_SPACE_SYSTEM       = 1, // aligned_alloc
 	BF_SPACE_CUDA         = 2, // cudaMalloc
 	BF_SPACE_CUDA_HOST    = 3, // cudaHostAlloc
-	BF_SPACE_CUDA_MANAGED = 4  // cudaMallocManaged
+	BF_SPACE_CUDA_MANAGED = 4, // cudaMallocManaged
+	BF_SPACE_MAPPED       = 5  // mmapped to a file
 } BFspace;
 
 BFstatus bfMalloc(void** ptr, BFsize size, BFspace space);

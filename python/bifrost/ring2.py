@@ -1,3 +1,22 @@
+"""Alternative ring buffer implementation with JSON headers and tensor semantics.
+
+This module provides an enhanced ring buffer (ring2) that builds on the base
+ring implementation with additional features for header transformation and
+frame-based indexing.
+
+Memory Spaces
+-------------
+Ring buffers can be allocated in different memory spaces:
+
+- ``system``: Standard CPU memory (default)
+- ``cuda``: GPU device memory
+- ``cuda_host``: Pinned CPU memory for faster GPU transfers
+- ``cuda_managed``: Unified memory accessible from CPU and GPU
+- ``mapped``: Disk-backed memory via memory-mapped files
+
+See :mod:`bifrost.ring` for details on memory spaces, including the
+disk-backed ``mapped`` space for large trigger buffers.
+"""
 
 # Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
 #
