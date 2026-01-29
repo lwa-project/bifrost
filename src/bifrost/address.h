@@ -56,6 +56,7 @@ BFstatus bfAddressCreate(BFaddress*  addr,
                          const char* addr_string,
                          int         port,
                          unsigned    family);
+
 /*! \p bfAddressDestroy releases an address object
  *
  *  \param addr The address to destroy
