@@ -164,9 +164,9 @@ public:
             //}
             for(c=0; c<pkt->nchan; c+=2) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               _mm256_stream_si256(dest_p+0*words_per_chan_out, _mm256_loadu_si256(src_p+0*words_per_chan_out));
-               _mm256_stream_si256(dest_p+1*words_per_chan_out, _mm256_loadu_si256(src_p+1*words_per_chan_out));
-               src_p += 2*words_per_chan_out;
+               _mm256_stream_si256(dest_p+0*words_per_chan_out, _mm256_loadu_si256(src_p+0));
+               _mm256_stream_si256(dest_p+1*words_per_chan_out, _mm256_loadu_si256(src_p+1));
+               src_p += 2;
                dest_p += 2*words_per_chan_out;
 #else
                ::memcpy(out + (words_per_chan_out * (pkt_chan + c + 0)) + pol_offset_out,
@@ -187,14 +187,16 @@ public:
             int count = nseq * nchan;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i zero = _mm256_setzero_si256();
-            for( int i=0; i<count; ++i ) {
-                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr), zero);
-                   ptr += nsrc;
+            for( int i=0; i<count; i+=2 ) {
+                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+0*nsrc), zero);
+                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+1*nsrc), zero);
+                   ptr += 2*nsrc;
             }
 #else
-            for( int i=0; i<count; ++i ) {
-                   ::memset(ptr, 0, sizeof(otype));
-                   ptr += nsrc;
+            for( int i=0; i<count; i+=2 ) {
+                   ::memset(ptr+0*nsrc, 0, sizeof(otype));
+                   ::memset(ptr+1*nsrc, 0, sizeof(otype));
+                   ptr += 2*nsrc;
             }
 #endif
     }

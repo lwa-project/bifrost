@@ -166,7 +166,7 @@ public:
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
                _mm256_stream_si256(dest_p,   _mm256_loadu_si256(src_p));
                _mm256_stream_si256(dest_p+1, _mm256_loadu_si256(src_p+1));
-               src_p += words_per_chan_out;
+               src_p += 2;
                dest_p += words_per_chan_out;
 #else
                ::memcpy(out + (words_per_chan_out * (pkt_chan + c)) + pol_offset_out,
@@ -181,18 +181,19 @@ public:
                                  int      nchan,
                                  int      nseq) {
             typedef aligned256_type otype;
-            otype* __restrict__ ptr = (otype*)data + src;
+            otype* __restrict__ ptr = (otype*)data + 2*src;
             int count = nseq * nchan;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i zero = _mm256_setzero_si256();
             for( int i=0; i<count; ++i ) {
-                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr), zero);
-                   ptr += nsrc;
+                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+0), zero);
+                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+1), zero);
+                   ptr += 2*nsrc;
             }
 #else
             for( int i=0; i<count; ++i ) {
-                   ::memset(ptr, 0, sizeof(otype));
-                   ptr += nsrc;
+                   ::memset(ptr, 0, 2*sizeof(otype));
+                   ptr += 2*nsrc;
             }
 #endif
     }
