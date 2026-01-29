@@ -48,12 +48,14 @@ ifeq ($(HAVE_PYTHON),1)
 	cd test && ./download_test_data.sh ; @PYTHON@ -m unittest discover -v
 endif
 .PHONY: test
+
 clean:
 ifeq ($(HAVE_PYTHON),1)
 	$(MAKE) -C $(BIFROST_PYTHON_DIR) clean || true
 endif
 	$(MAKE) -C $(SRC_DIR) clean
 .PHONY: clean
+
 install: $(INSTALL_LIB_DIR)/$(LIBBIFROST_SO_MAJ_MIN) $(INSTALL_INC_DIR)/$(BIFROST_NAME) $(INSTALL_DAT_DIR)/$(BIFROST_NAME) $(INSTALL_LIB_DIR)/pkgconfig $(INSTALL_BIN_DIR)/bifrost-config
 ifeq ($(HAVE_PYTHON),1)
 	$(MAKE) -C $(BIFROST_PYTHON_DIR) install
@@ -75,6 +77,7 @@ endif
 	@echo "See any operating system documentation about shared libraries for"
 	@echo "more information, such as the ld(1) and ld.so(8) manual pages."
 .PHONY: install
+
 uninstall:
 	rm -f $(INSTALL_LIB_DIR)/$(LIBBIFROST_SO)
 	rm -f $(INSTALL_LIB_DIR)/$(LIBBIFROST_SO_MAJ)
@@ -186,6 +189,10 @@ $(INSTALL_DAT_DIR)/bifrost: $(DAT_DIR)/*.m4
 $(INSTALL_LIB_DIR)/pkgconfig: $(DAT_DIR)/*.pc
 	mkdir -p $@
 	cp $? $@/
+
+tools/bifrost-config: tools/bifrost-config.in config.status
+	./config.status tools/bifrost-config
+	chmod +x tools/bifrost-config
 
 $(INSTALL_BIN_DIR)/bifrost-config: tools/bifrost-config
 	mkdir -p $(INSTALL_BIN_DIR)
