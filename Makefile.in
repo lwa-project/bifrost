@@ -191,7 +191,7 @@ $(INSTALL_LIB_DIR)/pkgconfig: $(DAT_DIR)/*.pc
 	cp $? $@/
 
 tools/bifrost-config: tools/bifrost-config.in config.status
-	./config.status tools/bifrost-config
+	./config.status --file=tools/bifrost-config
 	chmod +x tools/bifrost-config
 
 $(INSTALL_BIN_DIR)/bifrost-config: tools/bifrost-config
