@@ -83,7 +83,6 @@ BFstatus bfDeviceSet(int  device);
  */
 BFstatus bfDeviceSetById(const char* pci_bus_id);
 
-// This must be called _before_ initializing any devices in the current process
 /*! \p bfDevicesSetNoSpinCPU configures CUDA to not spin-wait on CPU
  *
  *  This reduces CPU usage when waiting for GPU operations but may
@@ -91,7 +90,8 @@ BFstatus bfDeviceSetById(const char* pci_bus_id);
  *  any CUDA devices in the current process.
  *
  *  \return BF_STATUS_SUCCESS on success
- *  \note This must be called before any other CUDA operations
+ *  \note This must be called _before_ initializing any devices in the 
+ *        current process.
  */
 BFstatus bfDevicesSetNoSpinCPU();
 
