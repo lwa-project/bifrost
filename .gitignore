@@ -2,6 +2,7 @@ doc
 version.py
 /python/bifrost/version/__init__.py
 *_generated.py
+*_generated_docs.py
 *_typehints.py
 .log*.txt
 test/data/
@@ -17,6 +18,7 @@ src/Makefile
 python/Makefile
 share/bifrost.pc
 src/bifrost/config.h
+tools/bifrost-config
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,10 +27,13 @@
  */
 
 /*! \file proclog.h
- *  \brief Defines functions for creating and updating real-time process logs
- *           that are stored in /dev/shm/bifrost/<pid>/<logname>
+ *  \brief Real-time process logging via shared memory
+ *
+ *  This module provides process logging via files in /dev/shm/bifrost/\<pid\>/,
+ *  allowing external tools to monitor pipeline status in real-time.
+ *
  *  \note Log files are deleted at process shutdown. Logs left behind by killed
- *          processes may be cleaned up during subsequent process launches.
+ *        processes may be cleaned up during subsequent process launches.
  */
 
 #ifndef BF_PROCLOG_H_INCLUDE_GUARD_
@@ -44,8 +47,25 @@ extern "C" {
 
 typedef struct BFproclog_impl* BFproclog;
 
+/*! \p bfProcLogCreate creates a new process log
+ *
+ *  Creates a log file at /dev/shm/bifrost/\<pid\>/\<name\>.
+ *
+ *  \param log_ptr Pointer to receive the log handle
+ *  \param name    Log name (becomes the filename)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfProcLogCreate(BFproclog* log_ptr, const char* name);
 BFstatus bfProcLogDestroy(BFproclog log);
+
+/*! \p bfProcLogUpdate writes new content to the log
+ *
+ *  Replaces the log contents with the given string.
+ *
+ *  \param log The log handle
+ *  \param str New log contents
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfProcLogUpdate(BFproclog log, const char* str);
 
 #ifdef __cplusplus

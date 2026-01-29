@@ -39,6 +39,18 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class TransposeBlock(TransformBlock):
+    """Block that transposes (permutes) array axes.
+
+    Reorders the axes of the input data according to the specified
+    permutation. Works on both CPU and GPU data.
+
+    Args:
+        iring: Input ring or block.
+        axes: Axis permutation as indices or labels.
+
+    See Also:
+        :func:`transpose`: Convenience function to create this block.
+    """
     def __init__(self, iring: Ring, axes: Union[List[int],Tuple[int]], *args, **kwargs):
         super(TransposeBlock, self).__init__(iring, *args, **kwargs)
         self.specified_axes = axes

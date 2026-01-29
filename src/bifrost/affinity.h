@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,10 @@
  */
 
 /*! \file affinity.h
- *  \brief CPU core binding/affinity functions
+ *  \brief CPU core affinity control
+ *
+ *  This module provides functions for binding threads to specific CPU cores,
+ *  which can improve performance by reducing cache misses and NUMA effects.
  */
 
 #ifndef BF_AFFINITY_H_INCLUDE_GUARD_
@@ -40,9 +43,20 @@
 extern "C" {
 #endif
 
-// Note: Pass core=-1 to unbind
+/*! \p bfAffinitySetCore binds the current thread to a CPU core
+ *
+ *  \param core CPU core index, or -1 to unbind
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAffinitySetCore(int core);
 BFstatus bfAffinityGetCore(int* core);
+
+/*! \p bfAffinitySetOpenMPCores sets core affinity for OpenMP threads
+ *
+ *  \param nthread      Number of threads to configure
+ *  \param thread_cores Array of core indices, one per thread
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfAffinitySetOpenMPCores(BFsize     nthread,
                                   const int* thread_cores);
 

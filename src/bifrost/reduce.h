@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +27,10 @@
  */
 
 /*! \file reduce.h
- *  \brief Defines functions for reducing ND-arrays using sum/min/max/etc.
+ *  \brief Reduction operations for multi-dimensional arrays
+ *
+ *  This module provides functions for reducing arrays along dimensions
+ *  using operations such as sum, mean, min, max, and power statistics.
  */
 
 #ifndef BF_REDUCE_H_INCLUDE_GUARD_
@@ -41,19 +44,30 @@
 extern "C" {
 #endif
 
+/*! \brief Reduction operations for bfReduce */
 typedef enum BFreduce_op_ {
-	BF_REDUCE_SUM,          // sum(x)
-	BF_REDUCE_MEAN,         // sum(x) / n
-	BF_REDUCE_MIN,          // min(x)
-	BF_REDUCE_MAX,          // max(x)
-	BF_REDUCE_STDERR,       // sum(x) / sqrt(n)
-	BF_REDUCE_POWER_SUM,    // sum(|x|^2)
-	BF_REDUCE_POWER_MEAN,   // sum(|x|^2) / n
-	BF_REDUCE_POWER_MIN,    // min(|x|^2)
-	BF_REDUCE_POWER_MAX,    // max(|x|^2)
-	BF_REDUCE_POWER_STDERR, // sum(|x|^2) / sqrt(n)
+	BF_REDUCE_SUM,          /*!< sum(x) */
+	BF_REDUCE_MEAN,         /*!< sum(x) / n */
+	BF_REDUCE_MIN,          /*!< min(x) */
+	BF_REDUCE_MAX,          /*!< max(x) */
+	BF_REDUCE_STDERR,       /*!< sum(x) / sqrt(n) */
+	BF_REDUCE_POWER_SUM,    /*!< sum(|x|^2) */
+	BF_REDUCE_POWER_MEAN,   /*!< sum(|x|^2) / n */
+	BF_REDUCE_POWER_MIN,    /*!< min(|x|^2) */
+	BF_REDUCE_POWER_MAX,    /*!< max(|x|^2) */
+	BF_REDUCE_POWER_STDERR, /*!< sum(|x|^2) / sqrt(n) */
 } BFreduce_op;
 
+/*! \p bfReduce reduces an array along collapsed dimensions
+ *
+ *  Dimensions with size 1 in the output are reduced from the input.
+ *  The input and output arrays must have the same number of dimensions.
+ *
+ *  \param in  Input array to reduce
+ *  \param out Output array (dimensions with size 1 are reduced)
+ *  \param op  Reduction operation to apply
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfReduce(BFarray const* in, BFarray const* out, BFreduce_op op);
 
 #ifdef __cplusplus

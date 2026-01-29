@@ -37,6 +37,30 @@ from bifrost import telemetry
 telemetry.track_module()
 
 def transpose(dst: ndarray, src: ndarray, axes: Optional[Union[List[int],Tuple[int]]]=None) -> ndarray:
+    """Transpose an array by permuting its axes.
+
+    This performs an optimized GPU transpose, efficiently reorganizing
+    data in memory according to the specified axis permutation.
+
+    Args:
+        dst: Destination array with transposed shape.
+        src: Source array to transpose.
+        axes: Permutation of axes. If None, reverses all axes
+            (equivalent to numpy's default transpose behavior).
+
+    Returns:
+        ndarray: The destination array (same as dst).
+
+    **Tensor semantics**::
+
+        Input:  shape [A, B, C, ...], dtype = any, space = CUDA
+        Output: shape [axes permutation], dtype = same, space = CUDA
+
+    Example:
+        >>> # Transpose a 3D array: (time, freq, pol) -> (freq, time, pol)
+        >>> dst = ndarray(shape=(nfreq, ntime, npol), dtype='cf32', space='cuda')
+        >>> transpose(dst, src, axes=[1, 0, 2])
+    """
     if axes is None:
         axes = reversed(range(len(dst.shape)))
     dst_bf = asarray(dst).as_BFarray()

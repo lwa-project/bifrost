@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file packet_writer.h
+ *  \brief Packet writing for various data formats
+ *
+ *  This module provides packet writing functionality for transmitting data
+ *  over UDP sockets, Infiniband Verbs, or to disk files. It supports multiple
+ *  packet formats including TBN, DRX, CHIPS, COR, and others.
+ */
+
 #ifndef BF_PACKET_WRITER_H_INCLUDE_GUARD_
 #define BF_PACKET_WRITER_H_INCLUDE_GUARD_
 
@@ -35,8 +43,20 @@ extern "C" {
 
 #include <bifrost/array.h>
 
+// Header setup
+
+/*! \name Header Setup
+ *  Functions for creating and managing packet headers for writer objects.
+ *  @{
+ */
+
 typedef struct BFheaderinfo_impl* BFheaderinfo;
 
+/*! \p bfHeaderInfoCreate allocates a new header info object
+ *
+ *  \param obj Pointer to receive the header info handle
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfHeaderInfoCreate(BFheaderinfo* obj);
 BFstatus bfHeaderInfoDestroy(BFheaderinfo obj);
 BFstatus bfHeaderInfoSetNSrc(BFheaderinfo obj,
@@ -52,12 +72,37 @@ BFstatus bfHeaderInfoSetGain(BFheaderinfo       obj,
 BFstatus bfHeaderInfoSetDecimation(BFheaderinfo obj,
                                    unsigned int decimation);
 
+/*! @} */
+
+// Writer setup
+
+/*! \name Writer Setup
+ *  Functions for creating and managing packet writer objects.
+ *  @{
+ */
+
 typedef struct BFpacketwriter_impl* BFpacketwriter;
 
+/*! \p bfDiskWriterCreate creates a packet writer for disk output
+ *
+ *  \param obj    Pointer to receive the packet writer handle
+ *  \param format Packet format string (e.g., "tbn", "drx", "chips", "cor")
+ *  \param fd     Open file descriptor to write to
+ *  \param core   CPU core affinity (-1 for none)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfDiskWriterCreate(BFpacketwriter* obj,
                             const char*     format,
                             int             fd,
                             int             core);
+/*! \p bfUdpTransmitCreate creates a UDP packet transmitter
+ *
+ *  \param obj    Pointer to receive the packet writer handle
+ *  \param format Packet format string
+ *  \param fd     Bound UDP socket file descriptor
+ *  \param core   CPU core affinity (-1 for none)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfUdpTransmitCreate(BFpacketwriter* obj,
                              const char*     format,
                              int             fd,
@@ -66,18 +111,56 @@ BFstatus bfUdpVerbsTransmitCreate(BFpacketwriter* obj,
                                   const char*     format,
                                   int             fd,
                                   int             core);
+/*! \p bfPacketWriterDestroy releases a packet writer object
+ *
+ *  \param obj The packet writer object to destroy
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfPacketWriterDestroy(BFpacketwriter obj);
+
+/*! \p bfPacketWriterSetRateLimit sets the transmission rate limit
+ *
+ *  \param obj        The packet writer object
+ *  \param rate_limit Maximum rate in bytes per second (0 for unlimited)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfPacketWriterSetRateLimit(BFpacketwriter obj,
                                     unsigned int rate_limit);
+
+/*! \p bfPacketWriterResetRateLimitCounter resets the rate limiter state
+ *
+ *  \param obj The packet writer object
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfPacketWriterResetRateLimitCounter(BFpacketwriter obj);
+
+/*! \p bfPacketWriterResetCounter resets the packet counter
+ *
+ *  \param obj The packet writer object
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfPacketWriterResetCounter(BFpacketwriter obj);
-BFstatus bfPacketWriterSend(BFpacketwriter obj, 
+
+/*! \p bfPacketWriterSend writes array data as formatted packets
+ *
+ *  \param obj           The packet writer object
+ *  \param info          Header info with metadata for packet headers
+ *  \param seq           Starting sequence number
+ *  \param seq_increment Sequence number increment between packets
+ *  \param src           Starting source identifier
+ *  \param src_increment Source identifier increment between packets
+ *  \param in            Input array containing data to send
+ *  \return BF_STATUS_SUCCESS on success
+ */
+BFstatus bfPacketWriterSend(BFpacketwriter obj,
                             BFheaderinfo   info,
                             BFoffset       seq,
                             BFoffset       seq_increment,
                             BFoffset       src,
                             BFoffset       src_increment,
                             BFarray const* in);
+
+/*! @} */
 
 #ifdef __cplusplus
 } // extern "C"

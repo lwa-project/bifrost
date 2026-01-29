@@ -39,6 +39,25 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class AccumulateBlock(TransformBlock):
+    """Block that accumulates (integrates) multiple frames before output.
+
+    Sums consecutive input frames, outputting one accumulated frame for
+    every ``nframe`` input frames. This is useful for time integration
+    to improve signal-to-noise ratio.
+
+    Note:
+        This block processes one frame at a time (gulp_nframe=1) and
+        maintains internal state for accumulation.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space.
+        nframe: Number of frames to accumulate before output.
+        dtype: Output dtype. If None, uses input dtype.
+        gulp_nframe: Must be 1 (enforced).
+
+    See Also:
+        :func:`accumulate`: Convenience function to create this block.
+    """
     def __init__(self, iring, nframe, dtype=None, gulp_nframe=1,
              *args, **kwargs):
         assert(gulp_nframe == 1)

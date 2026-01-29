@@ -67,6 +67,20 @@ class BinaryFileRead(object):
 
 
 class BinaryFileReadBlock(bfp.SourceBlock):
+    """Block that reads raw binary data files into a pipeline.
+
+    Reads binary files containing arrays of a single data type.
+    Each file becomes a separate sequence.
+
+    Args:
+        filenames: List of input file paths.
+        gulp_size: Number of elements per gulp (sub-array size).
+        gulp_nframe: Number of frames per gulp.
+        dtype: Bifrost dtype string (e.g., 'f32', 'cf32').
+
+    See Also:
+        :func:`binary_read`: Convenience function to create this block.
+    """
     def __init__(self, filenames, gulp_size, gulp_nframe, dtype, *args, **kwargs):
         super(BinaryFileReadBlock, self).__init__(filenames, gulp_nframe, *args, **kwargs)
         self.dtype = dtype
@@ -103,6 +117,18 @@ class BinaryFileReadBlock(bfp.SourceBlock):
             return [0]
 
 class BinaryFileWriteBlock(bfp.SinkBlock):
+    """Block that writes pipeline data to raw binary files.
+
+    Writes data directly to binary files without headers. Output filenames
+    are generated from the sequence name plus the specified extension.
+
+    Args:
+        iring: Input ring or block.
+        file_ext: Output file extension (default 'out').
+
+    See Also:
+        :func:`binary_write`: Convenience function to create this block.
+    """
     def __init__(self, iring, file_ext='out', *args, **kwargs):
         super(BinaryFileWriteBlock, self).__init__(iring, *args, **kwargs)
         self.current_fileobj = None

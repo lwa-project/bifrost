@@ -34,6 +34,22 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class CorrelateBlock(TransformBlock):
+    """Block that cross-correlates antenna signals (X-engine).
+
+    Performs the cross-multiplication step of an FX correlator,
+    computing visibility matrices from station voltages. Integrates
+    over multiple time frames before output.
+
+    Uses a fast GPU kernel based on xGPU (Clark et al. 2011).
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space with
+            axes ['time', 'freq', 'station', 'pol'].
+        nframe_per_integration: Number of time frames to integrate.
+
+    See Also:
+        :func:`correlate`: Convenience function to create this block.
+    """
     def __init__(self, iring, nframe_per_integration,
                  *args, **kwargs):
         super(CorrelateBlock, self).__init__(iring, *args, **kwargs)

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2017, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2017, The University of New Mexico. All rights reserved.
+ * Copyright (c) 2017-2026, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2017-2026, The University of New Mexico. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file fir.h
+ *  \brief Finite Impulse Response (FIR) filtering
+ *
+ *  This module provides FIR filter operations with support for decimation.
+ *  Filters maintain state between calls to support streaming data.
+ */
+
 #ifndef BF_FIR_H_INCLUDE_GUARD_
 #define BF_FIR_H_INCLUDE_GUARD_
 
@@ -40,7 +47,26 @@ extern "C" {
 
 typedef struct BFfir_impl* BFfir;
 
+/*! \p bfFirCreate allocates a new FIR filter plan
+ *
+ *  \param plan Pointer to receive the plan handle
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfFirCreate(BFfir* plan);
+
+/*! \p bfFirInit initializes a FIR filter plan
+ *
+ *  Call with plan_storage=NULL to query required storage size.
+ *  Call again with allocated storage to complete initialization.
+ *
+ *  \param plan              The FIR plan to initialize
+ *  \param coeffs            Filter coefficients array
+ *  \param decim             Decimation factor (1 for no decimation)
+ *  \param space             Memory space for execution (system or cuda)
+ *  \param plan_storage      Storage buffer, or NULL to query size
+ *  \param plan_storage_size Pointer to storage size (in/out)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfFirInit(BFfir          plan,
                    BFarray const* coeffs,
                    BFsize         decim,
@@ -49,9 +75,17 @@ BFstatus bfFirInit(BFfir          plan,
                    BFsize*        plan_storage_size);
 BFstatus bfFirSetStream(BFfir       plan,
                         void const* stream);
-BFstatus bfFirSetCoeffs(BFfir          plan, 
+BFstatus bfFirSetCoeffs(BFfir          plan,
                         BFarray const* coeffs);
 BFstatus bfFirResetState(BFfir plan);
+
+/*! \p bfFirExecute applies the FIR filter to input data
+ *
+ *  \param plan The FIR plan
+ *  \param in   Input array
+ *  \param out  Output array (size reduced by decimation factor)
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfFirExecute(BFfir          plan,
                       BFarray const* in,
                       BFarray const* out);

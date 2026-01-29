@@ -27,6 +27,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file transpose.h
+ *  \brief GPU-accelerated array transpose functions
+ *
+ *  This module provides optimized transpose operations for reorganizing
+ *  multi-dimensional array data on the GPU.
+ */
+
 #ifndef BF_TRANSPOSE_H_INCLUDE_GUARD_
 #define BF_TRANSPOSE_H_INCLUDE_GUARD_
 
@@ -37,6 +44,21 @@
 extern "C" {
 #endif
 
+/*! \p bfTranspose permutes the axes of an array
+ *
+ *  Efficiently reorganizes array data according to the specified
+ *  axis permutation.
+ *
+ *  \param in   Input array
+ *  \param out  Output array with transposed shape
+ *  \param axes Array of axis indices specifying the permutation.
+ *              If NULL, reverses all axes (like numpy.transpose())
+ *  \return BF_STATUS_SUCCESS on success
+ *
+ *  \note The output array must have the correct transposed shape.
+ *        For example, if input shape is (A, B, C) and axes is {2, 0, 1},
+ *        output shape must be (C, A, B).
+ */
 BFstatus bfTranspose(BFarray const* in,
                      BFarray const* out,
                      int     const* axes);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file io.h
+ *  \brief I/O method and seek constants
+ *
+ *  This module defines enumerations for I/O methods and file seek operations
+ *  used by packet capture and other I/O functionality.
+ */
+
 #ifndef BF_IO_H_INCLUDE_GUARD_
 #define BF_IO_H_INCLUDE_GUARD_
 
@@ -35,18 +42,20 @@
 extern "C" {
 #endif
 
+/*! \brief I/O method types for packet capture */
 typedef enum BFiomethod_ {
-    BF_IO_GENERIC = 0,
-    BF_IO_DISK    = 1,
-    BF_IO_UDP     = 2,
-    BF_IO_SNIFFER = 3,
-    BF_IO_VERBS   = 4
+    BF_IO_GENERIC = 0,  /*!< Generic I/O (default) */
+    BF_IO_DISK    = 1,  /*!< Disk file I/O */
+    BF_IO_UDP     = 2,  /*!< UDP socket I/O */
+    BF_IO_SNIFFER = 3,  /*!< Raw socket sniffer I/O */
+    BF_IO_VERBS   = 4   /*!< Infiniband Verbs I/O */
 } BFiomethod;
 
+/*! \brief File seek origin constants */
 typedef enum BFiowhence_ {
-    BF_WHENCE_SET = SEEK_SET,
-    BF_WHENCE_CUR = SEEK_CUR,
-    BF_WHENCE_END = SEEK_END
+    BF_WHENCE_SET = SEEK_SET,  /*!< Seek from beginning of file */
+    BF_WHENCE_CUR = SEEK_CUR,  /*!< Seek from current position */
+    BF_WHENCE_END = SEEK_END   /*!< Seek from end of file */
 } BFiowhence;
 
 #ifdef __cplusplus
