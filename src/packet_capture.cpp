@@ -146,6 +146,13 @@ BFstatus bfPacketCaptureCallbackSetSNAP2(BFpacketcapture_callback obj,
     return BF_STATUS_SUCCESS;
 }
 
+BFstatus bfPacketCaptureCallbackSetZCU102(BFpacketcapture_callback obj,
+                                          BFpacketcapture_zcu102_sequence_callback callback) {
+    BF_ASSERT(obj, BF_STATUS_INVALID_HANDLE);
+    obj->set_zcu102(callback);
+    return BF_STATUS_SUCCESS;
+}
+
 BFstatus bfPacketCaptureCallbackSetIBeam(BFpacketcapture_callback obj,
                                          BFpacketcapture_ibeam_sequence_callback callback) {
     BF_ASSERT(obj, BF_STATUS_INVALID_HANDLE);

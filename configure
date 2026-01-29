@@ -742,6 +742,7 @@ RDMA_MAXMEM
 HAVE_RDMA
 VERBS_SEND_PACING
 VERBS_SEND_NPKTBUF
+VERBS_WCBATCH
 VERBS_NPKTBUF
 HAVE_VERBS
 HAVE_VMA
@@ -861,6 +862,7 @@ enable_hwloc
 enable_vma
 enable_verbs
 with_rx_buffer_size
+with_verbs_wcbatch
 with_tx_buffer_size
 enable_rdma
 with_rdma_max_mem
@@ -1584,7 +1586,9 @@ Optional Packages:
                           compiler's sysroot if not specified).
   --with-ctags=[PATH]   absolute path to ctags executable
   --with-rx-buffer-size=N default Infiniband verbs receive buffer size in
-                          packets (default=8192)
+                          packets (default=32768)
+  --with-verbs-wcbatch=N  default Infiniband verbs completion queue batch size
+                          (default=64)
   --with-tx-buffer-size=N default Infiniband verbs send buffer size in packets
                           (default=512)
   --with-rdma-max-mem=N   maximum RDMA buffer size in bytes
@@ -21549,7 +21553,7 @@ if test ${with_rx_buffer_size+y}
 then :
   withval=$with_rx_buffer_size;
 else case e in #(
-  e) with_rx_buffer_size=8192 ;;
+  e) with_rx_buffer_size=32768 ;;
 esac
 fi
 
@@ -21558,6 +21562,24 @@ fi
  if test x$HAVE_VERBS = x0
 then :
   VERBS_NPKTBUF=0
+
+fi
+
+
+# Check whether --with-verbs-wcbatch was given.
+if test ${with_verbs_wcbatch+y}
+then :
+  withval=$with_verbs_wcbatch;
+else case e in #(
+  e) with_verbs_wcbatch=64 ;;
+esac
+fi
+
+ VERBS_WCBATCH=$with_verbs_wcbatch
+
+ if test x$HAVE_VERBS = x0
+then :
+  VERBS_WCBATCH=0
 
 fi
 
