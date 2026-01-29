@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +27,11 @@
  */
 
 /*! \file linalg.h
- *  \brief Routines related to linear algebra
+ *  \brief Linear algebra operations for multi-dimensional arrays
+ *
+ *  This module provides linear algebra routines including batched matrix
+ *  multiplication. Operations are performed on the trailing dimensions
+ *  of arrays, with leading dimensions treated as batch dimensions.
  */
 
 #ifndef BF_LINALG_H_INCLUDE_GUARD_
@@ -42,16 +46,34 @@ extern "C" {
 
 typedef struct BFlinalg_impl* BFlinalg;
 
+/*! \p bfLinAlgCreate allocates a new linear algebra context
+ *
+ *  \param handle_ptr Pointer to receive the context handle
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfLinAlgCreate(BFlinalg* handle_ptr);
 BFstatus bfLinAlgDestroy(BFlinalg handle);
 
-// Computes c = a.b, or a.a^H or b^H.b if either a or b are NULL
+/*! \p bfLinAlgMatMul performs batched matrix multiplication
+ *
+ *  Computes c = alpha * a.b + beta * c, where the multiplication is
+ *  performed on the last two dimensions and leading dimensions are batched.
+ *  If a is NULL, computes b^H.b. If b is NULL, computes a.a^H.
+ *
+ *  \param handle Linear algebra context
+ *  \param alpha  Scalar multiplier for the product
+ *  \param a      Input matrix a with shape [...,i,j], or NULL
+ *  \param b      Input matrix b with shape [...,j,k], or NULL
+ *  \param beta   Scalar multiplier for existing c values
+ *  \param c      Output matrix with shape [...,i,k]
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfLinAlgMatMul(BFlinalg       handle,
                         double         alpha,
-                        BFarray const* a,   // [...,i,j]
-                        BFarray const* b,   // [...,j,k]
+                        BFarray const* a,
+                        BFarray const* b,
                         double         beta,
-                        BFarray const* c);  // [...,i,k]
+                        BFarray const* c);
 
 #ifdef __cplusplus
 } // extern "C"

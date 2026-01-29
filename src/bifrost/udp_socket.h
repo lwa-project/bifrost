@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file udp_socket.h
+ *  \brief UDP socket operations
+ *
+ *  This module provides UDP socket functionality for network I/O,
+ *  including binding, connecting, and packet sniffing modes.
+ */
+
 #ifndef BF_UDP_SOCKET_H_INCLUDE_GUARD_
 #define BF_UDP_SOCKET_H_INCLUDE_GUARD_
 
@@ -37,18 +44,69 @@ extern "C" {
 
 typedef struct BFudpsocket_impl* BFudpsocket;
 
+/*! \p bfUdpSocketCreate allocates a new UDP socket object
+ *
+ *  \param obj Pointer to receive the socket handle
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfUdpSocketCreate(BFudpsocket* obj);
 BFstatus bfUdpSocketDestroy(BFudpsocket obj);
+
+/*! \p bfUdpSocketConnect connects the socket to a remote address
+ *
+ *  After connecting, send operations will target this address.
+ *
+ *  \param obj         The socket object
+ *  \param remote_addr Remote address to connect to
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfUdpSocketConnect(BFudpsocket obj, BFaddress remote_addr);
-BFstatus bfUdpSocketBind(   BFudpsocket obj, BFaddress local_addr);
-BFstatus bfUdpSocketSniff(  BFudpsocket obj, BFaddress local_addr);
-BFstatus bfUdpSocketShutdown(BFudpsocket obj); // Unblocks recv in another thread
+
+/*! \p bfUdpSocketBind binds the socket to a local address
+ *
+ *  \param obj        The socket object
+ *  \param local_addr Local address to bind to
+ *  \return BF_STATUS_SUCCESS on success
+ */
+BFstatus bfUdpSocketBind(BFudpsocket obj, BFaddress local_addr);
+
+/*! \p bfUdpSocketSniff enables packet capture mode on an interface
+ *
+ *  Opens a raw socket for capturing packets on the interface
+ *  associated with the given address.
+ *
+ *  \param obj        The socket object
+ *  \param local_addr Address identifying the interface to sniff
+ *  \return BF_STATUS_SUCCESS on success
+ */
+BFstatus bfUdpSocketSniff(BFudpsocket obj, BFaddress local_addr);
+
+/*! \p bfUdpSocketShutdown disables further send/receive on the socket
+ *
+ *  \param obj The socket object
+ *  \return BF_STATUS_SUCCESS on success
+ */
+BFstatus bfUdpSocketShutdown(BFudpsocket obj);
 BFstatus bfUdpSocketClose(BFudpsocket obj);
 BFstatus bfUdpSocketSetTimeout(BFudpsocket obj, double secs);
 BFstatus bfUdpSocketGetTimeout(BFudpsocket obj, double* secs);
 BFstatus bfUdpSocketSetPromiscuous(BFudpsocket obj, int promisc);
 BFstatus bfUdpSocketGetPromiscuous(BFudpsocket obj, int* promisc);
+
+/*! \p bfUdpSocketGetMTU gets the interface maximum transmission unit
+ *
+ *  \param obj The socket object
+ *  \param mtu Pointer to receive the MTU in bytes
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfUdpSocketGetMTU(BFudpsocket obj, int* mtu);
+
+/*! \p bfUdpSocketGetFD gets the underlying file descriptor
+ *
+ *  \param obj The socket object
+ *  \param fd  Pointer to receive the file descriptor
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfUdpSocketGetFD(BFudpsocket obj, int* fd);
 
 #ifdef __cplusplus

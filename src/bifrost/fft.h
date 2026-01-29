@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -64,7 +64,7 @@ BFstatus bfFftCreate(BFfft* plan_ptr);
  *
  *  \param plan             The FFT plan handle
  *  \param iarray           Input array (defines transform shape)
- *  \param oarray           Output array (defined transform shape)
+ *  \param oarray           Output array (defines result shape)
  *  \param ndim             Number of axes to transform
  *  \param axes             Array of axis indices to transform
  *  \param apply_fftshift   If true, shift zero-frequency to center
