@@ -51,13 +51,20 @@ typedef struct BFfft_impl* BFfft;
  *  \return BF_STATUS_SUCCESS on success
  */
 BFstatus bfFftCreate(BFfft* plan_ptr);
+
 /*! \p bfFftInit initializes an FFT plan for specific array dimensions
+ *
+ *  Transform modes based on input/output types:
+ *  - complex, complex => forward/inverse FFT
+ *  - real, complex    => real-to-complex FFT
+ *  - complex, real    => complex-to-real inverse FFT
+ *  - real, real       => ERROR
  *
  *  The plan can be reused for arrays with the same shape and strides.
  *
  *  \param plan             The FFT plan handle
- *  \param iarray           Input array specification (defines transform shape)
- *  \param oarray           Output array specification
+ *  \param iarray           Input array (defines transform shape)
+ *  \param oarray           Output array (defined transform shape)
  *  \param ndim             Number of axes to transform
  *  \param axes             Array of axis indices to transform
  *  \param apply_fftshift   If true, shift zero-frequency to center
@@ -71,11 +78,7 @@ BFstatus bfFftInit(BFfft          plan,
                    int     const* axes,
                    BFbool         apply_fftshift,
                    size_t*        tmp_storage_size);
-// in, out = complex, complex => [i]fft
-// in, out = real, complex    => rfft
-// in, out = complex, real    => irfft
-// in, out = real, real       => ERROR
-// tmp_storage_size If NULL, library will allocate storage automatically
+
 /*! \p bfFftExecute executes the FFT on the given arrays
  *
  *  Transform modes based on input/output types:
@@ -99,6 +102,7 @@ BFstatus bfFftExecute(BFfft          plan,
                       BFbool         inverse,
                       void*          tmp_storage,
                       size_t         tmp_storage_size);
+
 /*! \p bfFftDestroy releases an FFT plan and its resources
  *
  *  \param plan The FFT plan to destroy
