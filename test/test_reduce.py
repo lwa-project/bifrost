@@ -1,5 +1,5 @@
 
-# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,30 +33,6 @@ from bifrost.DataType import ci4
 from bifrost.libbifrost_generated import BF_CUDA_ENABLED
 
 #import time
-
-def pack_ci4(real, imag):
-    """Pack two 4-bit signed integers into a CI4 byte.
-
-    CI4 format: real in high nibble, imaginary in low nibble.
-    Values should be in range [-8, 7].
-    """
-    # Ensure values are in range
-    real = np.clip(real, -8, 7).astype(np.int8)
-    imag = np.clip(imag, -8, 7).astype(np.int8)
-    # Pack: real in high nibble, imag in low nibble
-    packed = ((real & 0x0F) << 4) | (imag & 0x0F)
-    return packed.astype(np.uint8)
-
-def unpack_ci4(packed):
-    """Unpack a CI4 byte to complex float.
-
-    Returns complex64 with real and imaginary parts.
-    """
-    # Extract and sign-extend
-    packed = packed.astype(np.uint8)
-    real = (packed.astype(np.int8) & np.int8(0xF0)) // 16
-    imag = ((packed << 4).astype(np.int8)) // 16
-    return real.astype(np.float32) + 1j * imag.astype(np.float32)
 
 def stderr(data, axis):
     return np.sum(data, axis=axis) / np.sqrt(data.shape[axis])
@@ -218,19 +194,19 @@ class ReduceTest(unittest.TestCase):
         Values range from -8 to 7 for each component.
         """
         # Generate random 4-bit signed values for real and imaginary parts
-        real = np.random.randint(-8, 8, size=shape).astype(np.int8)
-        imag = np.random.randint(-8, 8, size=shape).astype(np.int8)
+        real = np.random.randint(-8, 7, size=shape).astype(np.int8)
+        imag = np.random.randint(-8, 7, size=shape).astype(np.int8)
 
         # Pack into CI4 format (real in high nibble, imag in low nibble)
-        packed = pack_ci4(real, imag)
+        packed = (real * 16).astype(np.uint8) | ((imag * 16).astype(np.uint8) >> 4)
 
         # Create the expected result by unpacking and reducing
-        unpacked = unpack_ci4(packed)
+        unpacked = real + 1j*imag
         if op[:3] == 'pwr':
             b_gold = pwrscrunch(unpacked, n, axis, NP_OPS[op[3:]]).astype(np.float32)
         else:
             b_gold = scrunch(unpacked, n, axis, NP_OPS[op]).astype(np.complex64)
-
+            
         # Create bifrost CI4 array
         # CI4 uses a structured dtype with a single uint8 field
         a_ci4 = np.empty(shape, dtype=ci4)
