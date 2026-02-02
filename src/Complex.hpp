@@ -113,6 +113,11 @@ struct enable_if {};
 template<class T>
 struct enable_if<true, T> { typedef T type; };
 
+template<bool B, class T, class F>
+struct conditional { typedef T type; };
+template<class T, class F>
+struct conditional<false, T, F> { typedef F type; };
+
 template<typename T> struct is_floating_point    { enum { value = false }; };
 template<> struct is_floating_point<float>       { enum { value = true  }; };
 template<> struct is_floating_point<double>      { enum { value = true  }; };
@@ -125,6 +130,19 @@ template<> struct is_storage_type<signed int>    { enum { value = true  }; };
 // TODO: Complex<half> breaks because there's no half(int) constructor
 //template<> struct is_storage_type<half>          { enum { value = true  }; };
 
+// WAR for no if constexpr() in C++11: type trait to detect Complex types
+template<typename T> struct is_complex           { enum { value = false }; };
+template<typename T> struct is_complex<Complex<T> > { enum { value = true  }; };
+
+// WAR for no if constexpr() in C++11: tag dispatch types compile-time branching
+struct RealTag {};
+struct ComplexTag {};
+
+template<typename T>
+struct complex_tag {
+	typedef typename conditional<is_complex<T>::value, ComplexTag, RealTag>::type type;
+};
+
 #ifdef __CUDACC_VER_MAJOR__
 template<typename Real> struct cuda_vector2_type {};
 template<>              struct cuda_vector2_type<float>  { typedef float2  type; };
@@ -132,6 +150,14 @@ template<>              struct cuda_vector2_type<double> { typedef double2 type;
 #endif
 
 } // namespace Complex_detail
+
+// WAR for no if constexpr() in C++11: convenience aliases at global scope
+using Complex_detail::RealTag;
+using Complex_detail::ComplexTag;
+template<typename T>
+using IsComplexType = Complex_detail::is_complex<T>;
+template<typename T>
+using ComplexTag_t = typename Complex_detail::complex_tag<T>::type;
 
 // Storage-only types
 template<typename T>

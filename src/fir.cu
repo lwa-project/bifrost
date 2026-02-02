@@ -50,24 +50,7 @@ using std::cout;
 using std::endl;
 
 
-// This would be so much easier with C++17 and if constexpr()
-template<typename T>
-struct is_complex_output : std::false_type {};
-template<>
-struct is_complex_output<Complex32> : std::true_type {};
-template<>
-struct is_complex_output<Complex64> : std::true_type {};
-
-struct RealTag {};
-struct ComplexTag {};
-
-template<typename OutType>
-using OutputTag = typename std::conditional<
-	is_complex_output<OutType>::value,
-	ComplexTag,
-	RealTag
->::type;
-
+// WAR for no if constexpr() in C++11: see Complex.hpp for details
 // real -> Complex64
 template<typename InType, typename OutType>
 __device__ Complex64 read_input(const InType* d_in, int t, int nantpol, int a, RealTag) {
@@ -103,7 +86,7 @@ __global__ void fir_kernel(unsigned int               ncoeff,
                            Complex64*                 state1,
                            const InType* __restrict__ d_in,
                            OutType* __restrict__      d_out) {
-	using Tag = OutputTag<OutType>;
+	using Tag = ComplexTag_t<OutType>;
 	
 	int a = threadIdx.x + blockIdx.x*blockDim.x;
 	
