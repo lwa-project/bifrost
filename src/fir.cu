@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2017, The Bifrost Authors. All rights reserved.
- * Copyright (c) 2017, The University of New Mexico. All rights reserved.
+ * Copyright (c) 2017-2026, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2017-2026, The University of New Mexico. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -49,16 +49,62 @@
 using std::cout;
 using std::endl;
 
+
+// This would be so much easier with C++17 and if constexpr()
+template<typename T>
+struct is_complex_output : std::false_type {};
+template<>
+struct is_complex_output<Complex32> : std::true_type {};
+template<>
+struct is_complex_output<Complex64> : std::true_type {};
+
+struct RealTag {};
+struct ComplexTag {};
+
+template<typename OutType>
+using OutputTag = typename std::conditional<
+	is_complex_output<OutType>::value,
+	ComplexTag,
+	RealTag
+>::type;
+
+// real -> Complex64
+template<typename InType, typename OutType>
+__device__ Complex64 read_input(const InType* d_in, int t, int nantpol, int a, RealTag) {
+	return Complex64(d_in[t*nantpol + a], 0);
+}
+
+// complex -> Complex64
+template<typename InType, typename OutType>
+__device__ Complex64 read_input(const InType* d_in, int t, int nantpol, int a, ComplexTag) {
+	return Complex64(d_in[t*nantpol*2 + a*2 + 0],
+	                 d_in[t*nantpol*2 + a*2 + 1]);
+}
+
+// Complex64 -> real
+template<typename OutType>
+__device__ void write_output(OutType* d_out, int idx, Complex64 val, RealTag) {
+	d_out[idx] = (OutType) val.real;
+}
+
+// Complex64 -> complex
+template<typename OutType>
+__device__ void write_output(OutType* d_out, int idx, Complex64 val, ComplexTag) {
+	d_out[idx] = OutType(val.real, val.imag);
+}
+
 template<typename InType, typename OutType>
 __global__ void fir_kernel(unsigned int               ncoeff,
-                           unsigned int               decim, 
-                           unsigned int               ntime, 
+                           unsigned int               decim,
+                           unsigned int               ntime,
                            unsigned int               nantpol,
                            const double* __restrict__ coeffs,
                            Complex64*                 state0,
                            Complex64*                 state1,
                            const InType* __restrict__ d_in,
                            OutType* __restrict__      d_out) {
+	using Tag = OutputTag<OutType>;
+	
 	int a = threadIdx.x + blockIdx.x*blockDim.x;
 	
 	int c, t, t0;
@@ -76,19 +122,17 @@ __global__ void fir_kernel(unsigned int               ncoeff,
 					tempI = state0[(ncoeff+t)*nantpol + a];
 				} else {
 					// Fully inside the data
-					tempI = Complex64(d_in[t*nantpol*2 + a*2 + 0], \
-					                  d_in[t*nantpol*2 + a*2 + 1]);
+					tempI = read_input<InType, OutType>(d_in, t, nantpol, a, Tag());
 				}
 				tempO += tempI*coeffs[nantpol*c + a];
 			}
-			d_out[t0/decim*nantpol + a] = OutType(tempO.real, tempO.imag);
+			write_output(d_out, t0/decim*nantpol + a, tempO, Tag());
 			
 			for(t=t0; t<t0+decim; t++) {
 				c = ncoeff - (ntime - t);
 				if( c >= 0 && c < ncoeff && t < ntime) {
 					// Seed the initial state of the next call
-					state1[c*nantpol + a] = Complex64(d_in[t*nantpol*2 + a*2 + 0], \
-					                                  d_in[t*nantpol*2 + a*2 + 1]);
+					state1[c*nantpol + a] = read_input<InType, OutType>(d_in, t, nantpol, a, Tag());
 				}
 			}
 		}
@@ -97,8 +141,8 @@ __global__ void fir_kernel(unsigned int               ncoeff,
 
 template<typename InType, typename OutType>
 inline void launch_fir_kernel(unsigned int ncoeff,
-                              unsigned int decim, 
-                              unsigned int ntime, 
+                              unsigned int decim,
+                              unsigned int ntime,
                               unsigned int nantpol,
                               double*      coeffs,
                               Complex64*   state0,
@@ -127,7 +171,7 @@ inline void launch_fir_kernel(unsigned int ncoeff,
 	
 	void* args[] = {&ncoeff,
 	                &decim,
-	                &ntime, 
+	                &ntime,
 	                &nantpol,
 	                &coeffs,
 	                &state0,
@@ -242,57 +286,101 @@ public:
 		BF_ASSERT_EXCEPTION(_coeffs != NULL, BF_STATUS_INVALID_STATE);
 		BF_ASSERT_EXCEPTION(_state0 != NULL, BF_STATUS_INVALID_STATE);
 		BF_ASSERT_EXCEPTION(_state1 != NULL, BF_STATUS_INVALID_STATE);
-		BF_ASSERT_EXCEPTION(out->dtype == BF_DTYPE_CF32 || \
+		BF_ASSERT_EXCEPTION(out->dtype == BF_DTYPE_F32 || \
+		                    out->dtype == BF_DTYPE_F64 || \
+		                    out->dtype == BF_DTYPE_CF32 || \
 		                    out->dtype == BF_DTYPE_CF64,     BF_STATUS_UNSUPPORTED_DTYPE);
 		
 		BF_CHECK_CUDA_EXCEPTION(cudaGetLastError(), BF_STATUS_INTERNAL_ERROR);
 		
-#define LAUNCH_FIR_KERNEL(IterType,OterType) \
+#define LAUNCH_FIR_KERNEL(IterType, OterType) \
 		launch_fir_kernel(_ncoeff, _decim, in->shape[0], _nantpol, \
 		                  _coeffs, _state0, _state1, \
-		                  (IterType)in->data, (OterType)out->data, \
+		                  (IterType*)in->data, (OterType*)out->data, \
 		                  _stream)
 		
 		switch( in->dtype ) {
+			case BF_DTYPE_I8:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(int8_t, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(int8_t, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				};
+				break;
+			case BF_DTYPE_I16:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(int16_t, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(int16_t, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				}
+				break;
+			case BF_DTYPE_I32:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(int32_t, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(int32_t, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				}
+				break;
+			case BF_DTYPE_I64:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(int64_t, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(int64_t, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				}
+				break;
+			case BF_DTYPE_F32:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(float, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(float, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				}
+				break;
+			case BF_DTYPE_F64:
+				switch( out->dtype ) {
+					case BF_DTYPE_F32: LAUNCH_FIR_KERNEL(double, float);  break;
+					case BF_DTYPE_F64: LAUNCH_FIR_KERNEL(double, double); break;
+					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
+				}
+				break;
 			case BF_DTYPE_CI8:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int8_t*, Complex32*);  break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int8_t*, Complex64*);  break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int8_t, Complex32);  break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int8_t, Complex64);  break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				};
 				break;
 			case BF_DTYPE_CI16:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int16_t*, Complex32*); break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int16_t*, Complex64*); break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int16_t, Complex32); break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int16_t, Complex64); break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				}
 				break;
 			case BF_DTYPE_CI32:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int32_t*, Complex32*); break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int32_t*, Complex64*); break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int32_t, Complex32); break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int32_t, Complex64); break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				}
 				break;
 			case BF_DTYPE_CI64:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int64_t*, Complex32*); break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int64_t*, Complex64*); break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(int64_t, Complex32); break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(int64_t, Complex64); break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				}
 				break;
 			case BF_DTYPE_CF32:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(float*, Complex32*);   break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(float*, Complex64*);   break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(float, Complex32);  break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(float, Complex64);  break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				}
 				break;
 			case BF_DTYPE_CF64:
 				switch( out->dtype ) {
-					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(double*, Complex32*);  break;
-					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(double*, Complex64*);  break;
+					case BF_DTYPE_CF32: LAUNCH_FIR_KERNEL(double, Complex32); break;
+					case BF_DTYPE_CF64: LAUNCH_FIR_KERNEL(double, Complex64); break;
 					default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 				}
 				break;
