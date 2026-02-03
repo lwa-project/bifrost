@@ -361,11 +361,11 @@ BFstatus reduce_itype(BFarray const* in,
  */
 
 // CI4 helpers
-template<typename T> struct is_packed_complex { enum { value = 0 }; };                 
+template<typename T> struct is_packed_complex { enum { value = 0 }; };
 template<> struct is_packed_complex<Complex<FourBit>> { enum { value = 1 }; };
 
-template<typename T>                                                                   
-struct complex_stride { enum { value = 2 - is_packed_complex<T>::value }; };  
+template<typename T>
+struct complex_stride { enum { value = 2 - is_packed_complex<T>::value }; };
 
 template<typename IType, int N, typename IndexType>
 __device__ Complex<float> load_aligned_complex(aligned_vector_type<IType, N> ivals,
@@ -857,7 +857,7 @@ BFstatus reduce_complex_power_itype_otype(BFarray const* in,
         istrides.x % 8 == 0 && istrides.y % 8 == 0 && istrides.z % 8 == 0 &&
         is_reduce_vector_aligned(in, reduce_size));
     
-	constexpr int stride = complex_stride<IType>::value;
+    constexpr int stride = complex_stride<IType>::value;
     if( use_vec2_kernel ) {
         BF_TRY_RETURN(
             launch_reduce_complex_power_vector_kernel<stride*2>((IType*)in->data, (float*)out->data,
