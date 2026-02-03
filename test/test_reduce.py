@@ -1,5 +1,5 @@
 
-# Copyright (c) 2016-2023, The Bifrost Authors. All rights reserved.
+# Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 import unittest
 import numpy as np
 import bifrost as bf
+from bifrost.DataType import ci4
 
 from bifrost.libbifrost_generated import BF_CUDA_ENABLED
 
@@ -185,3 +186,55 @@ class ReduceTest(unittest.TestCase):
                             #print shape, axis, n, op, dtype
                             self.run_complex_reduce_test(shape, axis, n, op, dtype)
                             self.run_complex_reduce_slice_test(shape, axis, n, op, dtype)
+
+    def run_ci4_reduce_test(self, shape, axis, n, op='sum'):
+        """Test CI4 reduction.
+
+        CI4 data is 4-bit complex (4 bits real + 4 bits imaginary per sample).
+        Values range from -8 to 7 for each component.
+        """
+        # Generate random 4-bit signed values for real and imaginary parts
+        real = np.random.randint(-8, 7, size=shape).astype(np.int8)
+        imag = np.random.randint(-8, 7, size=shape).astype(np.int8)
+
+        # Pack into CI4 format (real in high nibble, imag in low nibble)
+        packed = (real * 16).astype(np.uint8) | ((imag * 16).astype(np.uint8) >> 4)
+
+        # Create the expected result by unpacking and reducing
+        unpacked = real + 1j*imag
+        if op[:3] == 'pwr':
+            b_gold = pwrscrunch(unpacked, n, axis, NP_OPS[op[3:]]).astype(np.float32)
+        else:
+            b_gold = scrunch(unpacked, n, axis, NP_OPS[op]).astype(np.complex64)
+            
+        # Create bifrost CI4 array
+        # CI4 uses a structured dtype with a single uint8 field
+        a_ci4 = np.empty(shape, dtype=ci4)
+        a_ci4['re_im'] = packed
+        a = bf.ndarray(a_ci4, dtype='ci4', space='cuda')
+
+        # Allocate output and run reduce
+        b = bf.empty_like(b_gold, space='cuda')
+        bf.reduce(a, b, op)
+        b = b.copy('system')
+
+        np.testing.assert_allclose(b, b_gold, rtol=1e-5)
+
+    def test_ci4_reduce(self):
+        """Test CI4 (4-bit complex) reduction operations."""
+        self.run_ci4_reduce_test((3,6,5), axis=1, n=2, op='sum')
+        for shape in [(20,20,40), (20,40,60), (40,100,200)]:
+            for axis in range(3):
+                for n in [2, 4, 5, 10, None]:
+                    for op in ['sum', 'mean', 'pwrsum', 'pwrmean']:
+                        #print(f"CI4: shape={shape}, axis={axis}, n={n}, op={op}")
+                        self.run_ci4_reduce_test(shape, axis, n, op)
+
+    def test_ci4_reduce_pow2(self):
+        """Test CI4 reduction with power-of-2 shapes."""
+        for shape in [(16,32,64), (16,64,256), (256,64,16)]:
+            for axis in range(3):
+                for n in [2, 4, 8, 16, None]:
+                    for op in ['sum', 'mean', 'pwrsum', 'pwrmean']:
+                        #print(f"CI4 pow2: shape={shape}, axis={axis}, n={n}, op={op}")
+                        self.run_ci4_reduce_test(shape, axis, n, op)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -360,6 +360,35 @@ BFstatus reduce_itype(BFarray const* in,
  * Complex - standard
  */
 
+// CI4 helpers
+template<typename T> struct is_packed_complex { enum { value = 0 }; };
+template<> struct is_packed_complex<Complex<FourBit>> { enum { value = 1 }; };
+
+template<typename T>
+struct complex_stride { enum { value = 2 - is_packed_complex<T>::value }; };
+
+template<typename IType, int N, typename IndexType>
+__device__ Complex<float> load_aligned_complex(aligned_vector_type<IType, N> ivals,
+                                               IndexType idx) {
+	return Complex<float>(ivals.v[idx], ivals.v[idx+1]);
+}
+template<int N, typename IndexType>
+__device__ Complex<float> load_aligned_complex(aligned_vector_type<Complex<FourBit>, N> ivals,
+                                               IndexType idx) {
+	return Complex<float>(ivals.v[idx]);
+}
+
+template<typename IType>
+__device__ Complex<float> load_complex(const IType* ival,
+                                       int idx) {
+	return Complex<float>(ival[idx], ival[idx+1]);
+}
+template<>
+__device__ Complex<float> load_complex(const Complex<FourBit>* ival,
+                                       int idx) {
+	return Complex<float>(ival[idx]);
+}
+
 // A specialized kernel for reducing over a small (<= 128-bit) fastest-changing
 //   dimension. Each thread performs a vector load and reduces the elements
 //   sequentially.
@@ -376,6 +405,7 @@ void reduce_complex_standard_vector_kernel(IType const* __restrict__ in,
 	                    threadIdx.z + blockIdx.z * blockDim.z,
 	                    0);
 	int4 i;
+	constexpr int stride = complex_stride<IType>::value;
 	for( i.z=i0.z; i.z<shape.z; i.z+=blockDim.z*gridDim.z ) {
 		for( i.y=i0.y; i.y<shape.y; i.y+=blockDim.y*gridDim.y ) {
 			for( i.x=i0.x; i.x<shape.x; i.x+=blockDim.x*gridDim.x ) {
@@ -383,11 +413,11 @@ void reduce_complex_standard_vector_kernel(IType const* __restrict__ in,
 				             i.y * istrides.y +
 				             i.z * istrides.z);
 				typedef aligned_vector_type<IType, N> VType;
-				VType ivals = type_pun<VType const*>(in)[2*iidx0 / N];
-				Complex<float> result = Complex<float>(ivals.v[0], ivals.v[1]);
+				VType ivals = type_pun<VType const*>(in)[stride*iidx0 / N];
+				Complex<float> result = load_aligned_complex(ivals, 0);
 #pragma unroll
-				for( int n=2; n<N; n+=2 ) {
-					Complex<float> ival = Complex<float>(ivals.v[n], ivals.v[n+1]);
+				for( int n=stride; n<N; n+=stride ) {
+					Complex<float> ival = load_aligned_complex(ivals, n);
 					switch( op ) {
                     case BF_REDUCE_SUM:          // Fall-through
                     case BF_REDUCE_MEAN:         // Fall-through
@@ -454,15 +484,16 @@ void reduce_complex_standard_loop_kernel(IType const* __restrict__ in,
 	                    threadIdx.z + blockIdx.z * blockDim.z,
 	                    0);
 	int4 i;
+	constexpr int stride = complex_stride<IType>::value;
 	for( i.z=i0.z; i.z<shape.z; i.z+=blockDim.z*gridDim.z ) {
 		for( i.y=i0.y; i.y<shape.y; i.y+=blockDim.y*gridDim.y ) {
 			for( i.x=i0.x; i.x<shape.x; i.x+=blockDim.x*gridDim.x ) {
 				int iidx0 = (i.x * istrides.x +
 				             i.y * istrides.y +
 				             i.z * istrides.z);
-				Complex<float> result = Complex<float>(in[2*iidx0], in[2*iidx0+1]);
+				Complex<float> result = load_complex(in, stride*iidx0);
 				for( i.w=1; i.w<shape.w; ++i.w ) {
-					Complex<float> ival = Complex<float>(in[2*(iidx0 + i.w * istrides.w)], in[2*(iidx0 + i.w * istrides.w) + 1]);
+					Complex<float> ival = load_complex(in, stride*(iidx0 + i.w * istrides.w));
 					switch( op ) {
                     case BF_REDUCE_SUM:          // Fall-through
                     case BF_REDUCE_MEAN:         // Fall-through
@@ -577,19 +608,20 @@ BFstatus reduce_complex_standard_itype_otype(BFarray const* in,
 		istrides.x % 8 == 0 && istrides.y % 8 == 0 && istrides.z % 8 == 0 &&
 		is_reduce_vector_aligned(in, reduce_size));
 	
+	constexpr int stride = complex_stride<IType>::value;
 	if( use_vec2_kernel ) {
 		BF_TRY_RETURN(
-			launch_reduce_complex_standard_vector_kernel<4>((IType*)in->data, (float*)out->data,
+			launch_reduce_complex_standard_vector_kernel<stride*2>((IType*)in->data, (float*)out->data,
 			                                                shape, istrides, ostrides,
 			                                                op, g_cuda_stream));
 	} else if( use_vec4_kernel ) {
 		BF_TRY_RETURN(
-			launch_reduce_complex_standard_vector_kernel<8>((IType*)in->data, (float*)out->data,
+			launch_reduce_complex_standard_vector_kernel<stride*4>((IType*)in->data, (float*)out->data,
 			                                                shape, istrides, ostrides,
 			                                                op, g_cuda_stream));
 	} else if( use_vec8_kernel ) {
 		BF_TRY_RETURN(
-			launch_reduce_complex_standard_vector_kernel<16>((IType*)in->data, (float*)out->data,
+			launch_reduce_complex_standard_vector_kernel<stride*8>((IType*)in->data, (float*)out->data,
 			                                                 shape, istrides, ostrides,
                                                              op, g_cuda_stream));
 	} else {
@@ -620,6 +652,7 @@ void reduce_complex_power_vector_kernel(IType const* __restrict__ in,
                         threadIdx.z + blockIdx.z * blockDim.z,
                         0);
     int4 i;
+    constexpr int stride = complex_stride<IType>::value;
     for( i.z=i0.z; i.z<shape.z; i.z+=blockDim.z*gridDim.z ) {
         for( i.y=i0.y; i.y<shape.y; i.y+=blockDim.y*gridDim.y ) {
             for( i.x=i0.x; i.x<shape.x; i.x+=blockDim.x*gridDim.x ) {
@@ -627,11 +660,11 @@ void reduce_complex_power_vector_kernel(IType const* __restrict__ in,
                              i.y * istrides.y +
                              i.z * istrides.z);
                 typedef aligned_vector_type<IType, N> VType;
-                VType ivals = type_pun<VType const*>(in)[2*iidx0 / N];
-                float result = (Complex<float>(ivals.v[0], ivals.v[1])).mag2();
+                VType ivals = type_pun<VType const*>(in)[stride*iidx0 / N];
+                float result = (load_aligned_complex(ivals, 0)).mag2();
 #pragma unroll
-                for( int n=2; n<N; n+=2 ) {
-                    float ival = Complex<float>(ivals.v[n], ivals.v[n+1]).mag2();
+                for( int n=stride; n<N; n+=stride ) {
+                    float ival = (load_aligned_complex(ivals, n)).mag2();
                     switch( op ) {
                     case BF_REDUCE_POWER_SUM:    // Fall-through
                     case BF_REDUCE_POWER_MEAN:   // Fall-through
@@ -699,15 +732,16 @@ void reduce_complex_power_loop_kernel(IType const* __restrict__ in,
                         threadIdx.z + blockIdx.z * blockDim.z,
                         0);
     int4 i;
+    constexpr int stride = complex_stride<IType>::value;
     for( i.z=i0.z; i.z<shape.z; i.z+=blockDim.z*gridDim.z ) {
         for( i.y=i0.y; i.y<shape.y; i.y+=blockDim.y*gridDim.y ) {
             for( i.x=i0.x; i.x<shape.x; i.x+=blockDim.x*gridDim.x ) {
                 int iidx0 = (i.x * istrides.x +
                              i.y * istrides.y +
                              i.z * istrides.z);
-                float result = (Complex<float>(in[2*iidx0], in[2*iidx0+1])).mag2();
+                float result = (load_complex(in, stride*iidx0)).mag2();
                 for( i.w=1; i.w<shape.w; ++i.w ) {
-                    float ival = Complex<float>(in[2*(iidx0 + i.w * istrides.w)], in[2*(iidx0 + i.w * istrides.w) + 1]).mag2();
+                    float ival = (load_complex(in, stride*(iidx0 + i.w * istrides.w))).mag2();
                     switch( op ) {
                     case BF_REDUCE_POWER_SUM:    // Fall-through
                     case BF_REDUCE_POWER_MEAN:   // Fall-through
@@ -823,19 +857,20 @@ BFstatus reduce_complex_power_itype_otype(BFarray const* in,
         istrides.x % 8 == 0 && istrides.y % 8 == 0 && istrides.z % 8 == 0 &&
         is_reduce_vector_aligned(in, reduce_size));
     
+    constexpr int stride = complex_stride<IType>::value;
     if( use_vec2_kernel ) {
         BF_TRY_RETURN(
-            launch_reduce_complex_power_vector_kernel<4>((IType*)in->data, (float*)out->data,
+            launch_reduce_complex_power_vector_kernel<stride*2>((IType*)in->data, (float*)out->data,
                                                          shape, istrides, ostrides,
                                                          op, g_cuda_stream));
     } else if( use_vec4_kernel ) {
         BF_TRY_RETURN(
-            launch_reduce_complex_power_vector_kernel<8>((IType*)in->data, (float*)out->data,
+            launch_reduce_complex_power_vector_kernel<stride*4>((IType*)in->data, (float*)out->data,
                                                          shape, istrides, ostrides,
                                                          op, g_cuda_stream));
     } else if( use_vec8_kernel ) {
         BF_TRY_RETURN(
-            launch_reduce_complex_power_vector_kernel<16>((IType*)in->data, (float*)out->data,
+            launch_reduce_complex_power_vector_kernel<stride*8>((IType*)in->data, (float*)out->data,
                                                           shape, istrides, ostrides,
                                                           op, g_cuda_stream));
     } else {
@@ -888,6 +923,7 @@ BFstatus reduce(BFarray const* in,
 	case BF_DTYPE_U8:   return reduce_itype<uint8_t >(in, out, op, axis);
 	case BF_DTYPE_U16:  return reduce_itype<uint16_t>(in, out, op, axis);
 	case BF_DTYPE_F32:  return reduce_itype<float   >(in, out, op, axis);
+	case BF_DTYPE_CI4:  return reduce_complex_itype<Complex<FourBit>>(in, out, op, axis);
 	case BF_DTYPE_CI8:  return reduce_complex_itype<int8_t  >(in, out, op, axis);
 	case BF_DTYPE_CI16: return reduce_complex_itype<int16_t >(in, out, op, axis);
 	case BF_DTYPE_CF32: return reduce_complex_itype<float   >(in, out, op, axis);
