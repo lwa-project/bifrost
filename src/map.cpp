@@ -180,6 +180,9 @@ BFstatus build_map_kernel(int*                 external_ndim,
 	code << "void " << kernel_name << "(";
 	for( int a=0; a<narg; ++a ) {
 		std::string ctype_string = dtype2ctype_string(args[a]->dtype);
+		if( !ctype_string.size() ) {
+			std::cerr << "Invalid '" << arg_names[a] << "' data type '" << args[a]->dtype << "'" << std::endl;
+		}
 		BF_ASSERT(ctype_string.size(), BF_STATUS_INVALID_ARGUMENT);
 		if( args[a]->ndim     == 1 &&
 		    args[a]->shape[0] == 1 &&
@@ -296,6 +299,9 @@ BFstatus build_map_kernel(int*                 external_ndim,
 	// Create named axis variables
 	if( axis_names ) {
 		for( int d=0; d<ndim; ++d ) {
+			if( axis_names[d][0] == '_' ) {
+				std::cerr << "Invalid 'axis_names[" << d << "]' entry '" << axis_names[d] << "'" << std::endl;
+			}
 			BF_ASSERT(axis_names[d][0] != '_', BF_STATUS_INVALID_ARGUMENT);
 			code << "    auto " << axis_names[d] << " = _[" << d << "];\n";
 		}
@@ -360,24 +366,32 @@ BFstatus build_map_kernel(int*                 external_ndim,
 	                                      options_c.size(),
 	                                      &options_c[0]);
 #if BF_DEBUG_ENABLED
-	size_t logsize;
-	// Note: Includes the trailing NULL
-	BF_CHECK_NVRTC( nvrtcGetProgramLogSize(program, &logsize) );
-	if( (logsize > 1 || EnvVars::get("BF_PRINT_MAP_KERNELS", "0") != "0") &&
-	     !basic_indexing_only ) {
-		std::vector<char> log(logsize, 0);
-		BF_CHECK_NVRTC( nvrtcGetProgramLog(program, &log[0]) );
-		int i = 1;
-		for( std::string line; std::getline(code, line); ++i ) {
-			std::cout << std::setfill(' ') << std::setw(3) << i << " " << line << endl;
+	// With BF_DEBUG_ENABLED, always print to std::cout
+	if( true ) {
+		std::ostream& lout = std::cout;
+#else
+	// Without BF_DEBUG_ENABLED, only print on error to std:cerr
+	if( ret != NVRTC_SUCCESS ) {
+		std::ostream& lout = std::cerr;
+#endif
+		size_t logsize;
+		// Note: Includes the trailing NULL
+		BF_CHECK_NVRTC( nvrtcGetProgramLogSize(program, &logsize) );
+		if( (logsize > 1 || EnvVars::get("BF_PRINT_MAP_KERNELS", "0") != "0") &&
+			!basic_indexing_only ) {
+			std::vector<char> log(logsize, 0);
+			BF_CHECK_NVRTC( nvrtcGetProgramLog(program, &log[0]) );
+			int i = 1;
+			for( std::string line; std::getline(code, line); ++i ) {
+				lout << std::setfill(' ') << std::setw(3) << i << " " << line << endl;
+			}
+			lout << "---------------------------------------------------" << std::endl;
+			lout << "--- JIT compile log for program " << program_name << " ---" << std::endl;
+			lout << "---------------------------------------------------" << std::endl;
+			lout << &log[0] << std::endl;
+			lout << "---------------------------------------------------" << std::endl;
 		}
-		std::cout << "---------------------------------------------------" << std::endl;
-		std::cout << "--- JIT compile log for program " << program_name << " ---" << std::endl;
-		std::cout << "---------------------------------------------------" << std::endl;
-		std::cout << &log[0] << std::endl;
-		std::cout << "---------------------------------------------------" << std::endl;
 	}
-#endif // BIFROST_DEBUG
 	if( ret != NVRTC_SUCCESS ) {
 		// Note: Don't print debug msg here, failure may not be expected
 		return BF_STATUS_INVALID_ARGUMENT;
