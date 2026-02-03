@@ -181,7 +181,7 @@ BFstatus build_map_kernel(int*                 external_ndim,
 	for( int a=0; a<narg; ++a ) {
 		std::string ctype_string = dtype2ctype_string(args[a]->dtype);
 		if( !ctype_string.size() ) {
-			std::cerr << "Invalid '" << arg_names[a] << "' data type '" << args[a]->dtype << "'" << std::endl;
+			std::cerr << "Invalid '" << arg_names[a] << "' data type " << args[a]->dtype << " = '" << dtype2info_string(args[a]->dtype) << "'" << std::endl;
 		}
 		BF_ASSERT(ctype_string.size(), BF_STATUS_INVALID_ARGUMENT);
 		if( args[a]->ndim     == 1 &&

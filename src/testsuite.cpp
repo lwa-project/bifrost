@@ -28,6 +28,7 @@
 
 #include <bifrost/testsuite.h>
 #include <bifrost/config.h>
+#include <bifrost/array.h>
 #include <fileutils.hpp>
 
 #include <sys/types.h> // For getpid
@@ -186,6 +187,83 @@ static TestResult test_remove_files_by_extension() {
   return OK;
 }
 
+// bfDtypeInfo tests
+
+static TestResult test_dtype_info_i32() {
+  BFdtype_info* info;
+  bfDtypeInfoCreate(&info);
+  bfDtypeInfo(BF_DTYPE_I32, info);
+
+  ASSERT(info->nbit == 32, "nbit should be 32, got " << info->nbit);
+  ASSERT(info->is_signed == 1, "should be signed");
+  ASSERT(info->is_floating_point == 0, "should not be float");
+  ASSERT(info->is_complex == 0, "should not be complex");
+  ASSERT(strcmp(info->name, "i32") == 0, "name should be 'i32', got '" << info->name << "'");
+
+  bfDtypeInfoDestroy(info);
+  return OK;
+}
+
+static TestResult test_dtype_info_u8() {
+  BFdtype_info* info;
+  bfDtypeInfoCreate(&info);
+  bfDtypeInfo(BF_DTYPE_U8, info);
+
+  ASSERT(info->nbit == 8, "nbit should be 8, got " << info->nbit);
+  ASSERT(info->is_signed == 0, "should not be signed");
+  ASSERT(info->is_floating_point == 0, "should not be float");
+  ASSERT(info->is_complex == 0, "should not be complex");
+  ASSERT(strcmp(info->name, "u8") == 0, "name should be 'u8', got '" << info->name << "'");
+
+  bfDtypeInfoDestroy(info);
+  return OK;
+}
+
+static TestResult test_dtype_info_f32() {
+  BFdtype_info* info;
+  bfDtypeInfoCreate(&info);
+  bfDtypeInfo(BF_DTYPE_F32, info);
+
+  ASSERT(info->nbit == 32, "nbit should be 32, got " << info->nbit);
+  ASSERT(info->is_signed == 1, "should be signed");
+  ASSERT(info->is_floating_point == 1, "should be float");
+  ASSERT(info->is_complex == 0, "should not be complex");
+  ASSERT(strcmp(info->name, "f32") == 0, "name should be 'f32', got '" << info->name << "'");
+
+  bfDtypeInfoDestroy(info);
+  return OK;
+}
+
+static TestResult test_dtype_info_ci16() {
+  BFdtype_info* info;
+  bfDtypeInfoCreate(&info);
+  bfDtypeInfo(BF_DTYPE_CI16, info);
+
+  ASSERT(info->nbit == 16, "nbit should be 16 (per-component), got " << info->nbit);
+  ASSERT(info->is_signed == 1, "should be signed");
+  ASSERT(info->is_floating_point == 0, "should not be float");
+  ASSERT(info->is_complex == 1, "should be complex");
+  ASSERT(strcmp(info->name, "ci16") == 0, "name should be 'ci16', got '" << info->name << "'");
+
+  bfDtypeInfoDestroy(info);
+  return OK;
+}
+
+static TestResult test_dtype_info_cf32() {
+  BFdtype_info* info;
+  bfDtypeInfoCreate(&info);
+  bfDtypeInfo(BF_DTYPE_CF32, info);
+
+  ASSERT(info->nbit == 32, "nbit should be 32 (per-component), got " << info->nbit);
+  ASSERT(info->is_signed == 1, "should be signed");
+  ASSERT(info->is_floating_point == 1, "should be float");
+  ASSERT(info->is_complex == 1, "should be complex");
+  ASSERT(strcmp(info->name, "cf32") == 0, "name should be 'cf32', got '" << info->name << "'");
+
+  bfDtypeInfoDestroy(info);
+  return OK;
+}
+
 int bfTestSuite() {
   int numFails = 0;
 
@@ -194,6 +272,12 @@ int bfTestSuite() {
   numFails += test_make_then_remove_dir();
   numFails += test_create_then_remove_file();
   numFails += test_remove_files_by_extension();
+
+  numFails += test_dtype_info_i32();
+  numFails += test_dtype_info_u8();
+  numFails += test_dtype_info_f32();
+  numFails += test_dtype_info_ci16();
+  numFails += test_dtype_info_cf32();
 
   switch(numFails) {
   case 0: TDEBUG("success"); break;

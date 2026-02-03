@@ -28,8 +28,19 @@
 
 #pragma once
 
+#include <bifrost/array.h>
+
 #include <string>
 #include <sstream>
+
+inline std::string dtype2info_string(BFdtype dtype) {
+	BFdtype_info* info_ptr;
+	bfDtypeInfoCreate(&info_ptr);
+	bfDtypeInfo(dtype, info_ptr);
+	std::string name(info_ptr->name);
+	bfDtypeInfoDestroy(info_ptr);
+	return name;
+}
 
 //const char* dtype2ctype_string(BFdtype dtype);
 //inline const char* dtype2ctype_string(BFdtype dtype) {

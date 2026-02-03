@@ -34,6 +34,66 @@
 #include <cassert>
 #include <cstring>
 
+BFstatus bfDtypeInfoCreate(BFdtype_info** info_ptr) {
+	BF_ASSERT(info_ptr, BF_STATUS_INVALID_POINTER);
+	BF_TRY_RETURN_ELSE(*info_ptr = new BFdtype_info(),
+	                   *info_ptr = 0);
+}
+
+BFstatus bfDtypeInfo(BFdtype dtype, BFdtype_info* info_ptr) {
+	BF_ASSERT(info_ptr, BF_STATUS_INVALID_POINTER);
+
+	int type_bits = (dtype & BF_DTYPE_TYPE_BITS);
+
+	info_ptr->nbit              = (dtype & BF_DTYPE_NBIT_BITS);
+	info_ptr->type              = type_bits;
+	info_ptr->is_signed         = (type_bits == BF_DTYPE_INT_TYPE || type_bits == BF_DTYPE_FLOAT_TYPE);
+	info_ptr->is_floating_point = (type_bits == BF_DTYPE_FLOAT_TYPE);
+	info_ptr->is_complex        = (dtype & BF_DTYPE_COMPLEX_BIT) ? 1 : 0;
+	info_ptr->is_storage        = (type_bits == BF_DTYPE_STORAGE_TYPE);
+	info_ptr->is_string         = (type_bits == BF_DTYPE_STRING_TYPE);
+	
+	char* name_ptr = info_ptr->name;
+	int pos = 0;
+	int vector_len = BF_DTYPE_VECTOR_LENGTH(dtype);
+	if( vector_len > 1 ) {
+		pos += sprintf(name_ptr + pos, "Vector<");
+	}
+	
+	if( info_ptr->is_complex ) {
+		name_ptr[pos++] = 'c';
+	}
+	if( info_ptr->is_floating_point ) {
+		name_ptr[pos++] = 'f';
+	} else if( info_ptr->is_string ) {
+		name_ptr[pos++] = 's';
+	} else if( info_ptr->is_signed ) {
+		name_ptr[pos++] = 'i';
+	} else {
+		name_ptr[pos++] = 'u';
+	}
+	pos += sprintf(name_ptr + pos, "%d", info_ptr->nbit);
+	
+	if( vector_len > 1 ) {
+		pos += sprintf(name_ptr + pos, ", %d>", vector_len);
+	}
+	
+	if( info_ptr->is_storage ) {
+		pos += sprintf(name_ptr + pos, " (storage)");
+	}
+	
+	name_ptr[pos] = '\0';
+	
+	return BF_STATUS_SUCCESS;
+}
+
+BFstatus bfDtypeInfoDestroy(BFdtype_info* info_ptr) {
+	BF_ASSERT(info_ptr, BF_STATUS_INVALID_HANDLE);
+	delete info_ptr;
+	return BF_STATUS_SUCCESS;
+}
+
+
 // Reads array->(space,dtype,ndim,shape), sets array->strides and
 //   allocates array->data.
 BFstatus bfArrayMalloc(BFarray* array) {

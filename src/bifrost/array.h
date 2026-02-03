@@ -93,25 +93,22 @@ typedef enum BFdtype_ {
 	BF_DTYPE_CF128 = 128 | BF_DTYPE_FLOAT_TYPE | BF_DTYPE_COMPLEX_BIT
 #endif
 } BFdtype;
-/*
+
 typedef struct BFdtype_info_ {
-	int32_t nbit;
-	int32_t type;
-	int8_t  is_complex;
-	int8_t  is_floating_point;
-	char    name[8];
+	int nbit;
+	int type;
+	char is_signed;
+	char is_floating_point;
+	char is_complex;
+	char is_storage;
+	char is_string;
+	char name[32];
 } BFdtype_info;
 
-// TODO: Implement this
-BFstatus bfTypeInfo(BFdtype dtype, BFdtype_info* info); {
-	BF_ASSERT(info, BF_STATUS_INVALID_POINTER);
-	info->nbit       = (dtype & BF_DTYPE_NBIT_BITS);
-	info->type       = (dtype & BF_DTYPE_TYPE_BITS) >> 8; // TODO: Avoid magic number
-	info->is_signed  = (dtype & BF_DTYPE_SIGNED_BIT);
-	info->is_complex = (dtype & BF_DTYPE_COMPLEX_BIT);
-	
-	}
-*/
+BFstatus bfDtypeInfoCreate(BFdtype_info** info_ptr);
+BFstatus bfDtypeInfo(BFdtype dtype, BFdtype_info* info_ptr);
+BFstatus bfDtypeInfoDestroy(BFdtype_info* info_ptr);
+
 
 typedef struct BFarray_ {
 	void*    data;
