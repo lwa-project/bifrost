@@ -922,10 +922,12 @@ BFstatus reduce(BFarray const* in,
 	case BF_DTYPE_I16:  return reduce_itype<int16_t >(in, out, op, axis);
 	case BF_DTYPE_U8:   return reduce_itype<uint8_t >(in, out, op, axis);
 	case BF_DTYPE_U16:  return reduce_itype<uint16_t>(in, out, op, axis);
+	case BF_DTYPE_F16:  return reduce_itype<__half  >(in, out, op, axis);
 	case BF_DTYPE_F32:  return reduce_itype<float   >(in, out, op, axis);
 	case BF_DTYPE_CI4:  return reduce_complex_itype<Complex<FourBit>>(in, out, op, axis);
 	case BF_DTYPE_CI8:  return reduce_complex_itype<int8_t  >(in, out, op, axis);
 	case BF_DTYPE_CI16: return reduce_complex_itype<int16_t >(in, out, op, axis);
+	case BF_DTYPE_CF16: return reduce_complex_itype<__half  >(in, out, op, axis);
 	case BF_DTYPE_CF32: return reduce_complex_itype<float   >(in, out, op, axis);
 	default: BF_FAIL("Unsupported input dtype", BF_STATUS_UNSUPPORTED_DTYPE);
 	}
