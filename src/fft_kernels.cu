@@ -29,6 +29,8 @@
 #include "fft_kernels.h"
 #include "cuda.hpp"
 
+#include <cuda_fp16.h>
+
 __device__
 inline size_t pre_fftshift(size_t        offset,
                            CallbackData* cb) {
@@ -141,6 +143,20 @@ cufftComplex callback_load_ci16(void*  dataIn,
 	return result;
 }
 __device__
+cufftComplex callback_load_cf16(void*  dataIn,
+                                size_t offset,
+                                void*  callerInfo,
+                                void*  sharedPointer) {
+	// WAR for CUFFT insisting on pointers aligned to sizeof(cufftComplex)
+	CallbackData* callback_data = (CallbackData*)callerInfo;
+	*(char**)&dataIn += callback_data->ptr_offset;
+	offset = pre_fftshift(offset, callback_data);
+	__half2 val = ((__half2*)dataIn)[offset];
+	cufftComplex result =__half22float2(val);
+	result = post_fftshift(offset, result, callback_data);
+	return result;
+}
+__device__
 cufftComplex callback_load_cf32(void*  dataIn,
                                 size_t offset,
                                 void*  callerInfo,
@@ -167,6 +183,7 @@ cufftDoubleComplex callback_load_cf64(void*  dataIn,
 static __device__ cufftCallbackLoadC callback_load_ci4_dptr  = callback_load_ci4;
 static __device__ cufftCallbackLoadC callback_load_ci8_dptr  = callback_load_ci8;
 static __device__ cufftCallbackLoadC callback_load_ci16_dptr = callback_load_ci16;
+static __device__ cufftCallbackLoadC callback_load_cf16_dptr = callback_load_cf16;
 static __device__ cufftCallbackLoadC callback_load_cf32_dptr = callback_load_cf32;
 static __device__ cufftCallbackLoadZ callback_load_cf64_dptr = callback_load_cf64;
 
@@ -191,10 +208,25 @@ cufftReal callback_load_real(void*  dataIn,
 	cufftReal result = val * (1.f/(maxval<T>()+1));
 	return result;
 }
+
+__device__
+cufftReal callback_load_real_f16(void*  dataIn,
+                                 size_t offset,
+                                 void*  callerInfo,
+                                 void*  sharedPointer) {
+	// WAR for CUFFT insisting on pointers aligned to sizeof(cufftComplex)
+	CallbackData* callback_data = (CallbackData*)callerInfo;
+	*(char**)&dataIn += callback_data->ptr_offset;
+	
+	__half val = ((__half*)dataIn)[offset];
+	cufftReal result = __half2float(val);
+	return result;
+}
 static __device__ cufftCallbackLoadR callback_load_i8_dptr  = callback_load_real<int8_t>;
 static __device__ cufftCallbackLoadR callback_load_i16_dptr = callback_load_real<int16_t>;
 static __device__ cufftCallbackLoadR callback_load_u8_dptr  = callback_load_real<uint8_t>;
 static __device__ cufftCallbackLoadR callback_load_u16_dptr = callback_load_real<uint16_t>;
+static __device__ cufftCallbackLoadR callback_load_f16_dptr = callback_load_real_f16;
 
 BFstatus set_fft_load_callback(BFdtype       dtype,
                                int           nbit,
@@ -281,6 +313,33 @@ BFstatus set_fft_load_callback(BFdtype       dtype,
 		BF_ASSERT(!do_fftshift, BF_STATUS_UNSUPPORTED);
 		BF_CHECK_CUDA( cudaMemcpyFromSymbol(&callback_load_r_hptr,
 		                                    callback_load_u16_dptr,
+		                                    sizeof(cufftCallbackLoadR)),
+		               BF_STATUS_DEVICE_ERROR );
+		BF_CHECK_CUFFT( cufftXtSetCallback(handle,
+		                                   (void**)&callback_load_r_hptr,
+		                                   CUFFT_CB_LD_REAL,
+		                                   (void**)&callerInfo) );
+		break;
+	}
+	case BF_DTYPE_CF16: {
+		if( do_fftshift ) {
+			BF_CHECK_CUDA( cudaMemcpyFromSymbol(&callback_load_c_hptr,
+			                                    callback_load_cf16_dptr,
+			                                    sizeof(cufftCallbackLoadC)),
+			               BF_STATUS_DEVICE_ERROR );
+			BF_CHECK_CUFFT( cufftXtSetCallback(handle,
+			                                   (void**)&callback_load_c_hptr,
+			                                   CUFFT_CB_LD_COMPLEX,
+			                                   (void**)&callerInfo) );
+			break;
+		} else {
+			// Fall-through
+		}
+	}
+	case BF_DTYPE_F16:  {
+		BF_ASSERT(!do_fftshift, BF_STATUS_UNSUPPORTED);
+		BF_CHECK_CUDA( cudaMemcpyFromSymbol(&callback_load_r_hptr,
+		                                    callback_load_f16_dptr,
 		                                    sizeof(cufftCallbackLoadR)),
 		               BF_STATUS_DEVICE_ERROR );
 		BF_CHECK_CUFFT( cufftXtSetCallback(handle,
