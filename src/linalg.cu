@@ -385,6 +385,19 @@ BFstatus bfMatMul_ab_exec_nobatch(BFlinalg    handle,
 	// TODO: Look into optimizations using cublasGemmEx algo selection and
 	//         batched/strided APIs.
 	switch( a_type ) {
+	case BF_DTYPE_F16: {
+		BF_ASSERT(c_type == BF_DTYPE_F16, BF_STATUS_UNSUPPORTED_DTYPE);
+		__half alpha_f = (__half)alpha;
+		__half beta_f  = (__half)beta;
+		BF_CHECK_CUBLAS(cublasHgemm(handle->cublas(), trans_a, trans_b,
+		                            m, n, k,
+		                            &alpha_f,
+		                            (__half*)a_data, a_stride,
+		                            (__half*)b_data, b_stride,
+		                            &beta_f,
+		                            (__half*)c_data, c_stride));
+		break;
+	}
 	case BF_DTYPE_F32: {
 		BF_ASSERT(c_type == BF_DTYPE_F32, BF_STATUS_UNSUPPORTED_DTYPE);
 		float alpha_f = (float)alpha;
@@ -509,6 +522,28 @@ BFstatus bfMatMul_ab_exec_batch(BFlinalg    handle,
 	// TODO: Look into optimizations using cublasGemmEx algo selection and
 	//         batched/strided APIs.
 	switch( a_type ) {
+	case BF_DTYPE_F16: {
+		BF_ASSERT(c_type == BF_DTYPE_F16, BF_STATUS_UNSUPPORTED_DTYPE);
+		BF_CHECK_CUBLAS(cublasHgemmStridedBatched(handle->cublas(),
+                                                           trans_a, 
+                                                           trans_b,
+                                                           m, 
+                                                           n, 
+                                                           k,
+                                                           (__half *)&alpha,
+                                                           (const __half *)a_data, 
+                                                           a_stride, 
+                                                           a_batchstride,
+                                                           (const __half *)b_data, 
+                                                           b_stride, 
+                                                           b_batchstride,
+                                                           (__half *)&beta,
+                                                           (__half *)c_data, 
+                                                           c_stride, 
+                                                           c_batchstride,
+                                                           nbatch));
+		break;
+	}
 	case BF_DTYPE_F32: {
 		BF_ASSERT(c_type == BF_DTYPE_F32, BF_STATUS_UNSUPPORTED_DTYPE);
 		BF_CHECK_CUBLAS(cublasSgemmStridedBatched(handle->cublas(),
@@ -572,22 +607,23 @@ BFstatus bfMatMul_ab_exec_batch(BFlinalg    handle,
                                                            CUDA_C_8I, 
                                                            b_stride, 
                                                            b_batchstride,
-						           &beta_cf,
-						           c_data, 
+                                                           &beta_cf,
+                                                           c_data, 
                                                            CUDA_C_32F, 
                                                            c_stride, 
                                                            c_batchstride,
-							   nbatch,
-                                                           CUBLAS_COMPUTE_32F,										                                           CUBLAS_GEMM_DEFAULT));
+                                                           nbatch,
+                                                           CUBLAS_COMPUTE_32F,                                    CUBLAS_GEMM_DEFAULT));
+		break;
 	}
-        case BF_DTYPE_CF32: {
+	case BF_DTYPE_CF32: {
 		BF_ASSERT(c_type == BF_DTYPE_CF32, BF_STATUS_UNSUPPORTED_DTYPE);
 		const cuComplex   alpha_cf = make_cuComplex(alpha, 0);
 		const cuComplex   beta_cf  = make_cuComplex(beta,  0);
 		BF_CHECK_CUBLAS(cublasCgemm3mStridedBatched(handle->cublas(), 
                                                            trans_a, 
                                                            trans_b,
-						           m, 
+                                                           m, 
                                                            n, 
                                                            k,
                                                            &alpha_cf,
@@ -612,7 +648,7 @@ BFstatus bfMatMul_ab_exec_batch(BFlinalg    handle,
 		BF_CHECK_CUBLAS(cublasZgemmStridedBatched(handle->cublas(), 
                                                            trans_a, 
                                                            trans_b,
-						           m, 
+                                                           m, 
                                                            n, 
                                                            k,
                                                            &alpha_cf,
@@ -680,27 +716,27 @@ BFstatus bfMatMul_ab_exec(BFlinalg    handle,
 	// TODO: Why does ci8 yield nans when we go into batched execution?
 	if( nbatch > 12 &&  a_type != BF_DTYPE_CI8 ) {
 			BF_CHECK( bfMatMul_ab_exec_batch(handle, 
-                                                         stream,
-							 trans_a, 
-                                                         trans_b,
-							 m, 
-                                                         n, 
-                                                         k,
-							 alpha,
-							 a_data, 
-                                                         a_type, 
-                                                         a_stride, 
-                                                         a_batchstride,
-							 b_data, 
-                                                         b_type, 
-                                                         b_stride, 
-                                                         b_batchstride,
-							 beta,
-							 c_data,  
-                                                         c_type, 
-                                                         c_stride, 
-                                                         c_batchstride,
-							 nbatch) );
+			                                             stream,
+			                                             trans_a, 
+			                                             trans_b,
+			                                             m, 
+			                                             n, 
+			                                             k,
+			                                             alpha,
+			                                             a_data, 
+			                                             a_type, 
+			                                             a_stride, 
+			                                             a_batchstride,
+			                                             b_data, 
+			                                             b_type, 
+			                                             b_stride, 
+			                                             b_batchstride,
+			                                             beta,
+			                                             c_data,  
+			                                             c_type, 
+			                                             c_stride, 
+			                                             c_batchstride,
+			                                             nbatch) );
 	} else {
 		  for( long b=0; b<nbatch; ++b ) {
 					cuda::child_stream child_stream(stream);
