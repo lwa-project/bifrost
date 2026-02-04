@@ -91,6 +91,49 @@ void fdmt_init_kernel(int                         ntime,
 	}
 }
 
+// Special verion for __half in, float out
+template<>
+__global__
+void fdmt_init_kernel(int                         ntime,
+                      int                         nchan,
+                      int                         nbatch,
+                      bool                        reverse_band,
+                      bool                        reverse_time,
+                      int     const* __restrict__ d_offsets,
+                      const __half*               d_in,
+                      int                         istride,
+                      int                         ibatchstride,
+                      float*       __restrict__ d_out,
+                      int                         ostride,
+                      int                         obatchstride) {
+	int t0 = threadIdx.x + blockIdx.x*blockDim.x;
+	int c0 = threadIdx.y + blockIdx.y*blockDim.y;
+	int b0 = blockIdx.z;
+	for( int b=b0; b<nbatch; b+=gridDim.z ) {
+	for( int c=c0; c<nchan; c+=blockDim.y*gridDim.y ) {
+		int offset = d_offsets[c];
+		int ndelay = d_offsets[c+1] - offset;
+		for( int t=t0; t<ntime; t+=blockDim.x*gridDim.x ) {
+			float tmp(0);
+			for( int d=0; d<ndelay; ++d ) {
+				// Note: This fills the unused elements with NaNs
+				float outval(CUDART_NAN_F);//std::numeric_limits<OutType>::quiet_NaN());
+				if( t >= d ) {
+					int c_ = reverse_band ? nchan-1 - c : c;
+					int t_ = reverse_time ? ntime-1 - t : t;
+					tmp += __half2float(d_in[(t_-d) + istride*c_ + ibatchstride*b]);
+					// TODO: Check effect of not-/using sqrt
+					//         The final paper has no sqrt (i.e., computation is just the mean)
+					//outval = tmp * rsqrtf(d+1);
+					outval = tmp * (1.f/(d+1));
+				}
+				d_out[t + ostride*(offset+d) + obatchstride*b] = outval;
+			}
+		}
+	}
+	}
+}
+
 // Note: Can be tuned over block shape
 template<typename DType>
 __global__
@@ -685,6 +728,7 @@ public:
 		case BF_DTYPE_U8:  LAUNCH_FDMT_INIT_KERNEL(const uint8_t*);  break;
 		case BF_DTYPE_U16: LAUNCH_FDMT_INIT_KERNEL(const uint16_t*); break;
 		case BF_DTYPE_U32: LAUNCH_FDMT_INIT_KERNEL(const uint32_t*); break;
+		case BF_DTYPE_F16: LAUNCH_FDMT_INIT_KERNEL(const __half*);   break;
 		case BF_DTYPE_F32: LAUNCH_FDMT_INIT_KERNEL(const float*);    break;
 		default: BF_ASSERT_EXCEPTION(false, BF_STATUS_UNSUPPORTED_DTYPE);
 		}
