@@ -28,8 +28,14 @@
 
 #pragma once
 
+#ifndef BF_FLOAT16_ENABLED
+#define BF_FLOAT16_ENABLED 0
+#endif
+
 #if BF_CUDA_ENABLED
 #include <cuda_fp16.h>
+#elif defined BF_FLOAT16_ENABLED && BF_FLOAT16_ENABLED
+using __half = _Float16;
 #endif
 
 #ifndef __CUDACC_RTC__
@@ -127,8 +133,9 @@ template<typename T> struct is_storage_type      { enum { value = false }; };
 template<> struct is_storage_type<signed char>   { enum { value = true  }; };
 template<> struct is_storage_type<signed short>  { enum { value = true  }; };
 template<> struct is_storage_type<signed int>    { enum { value = true  }; };
-// TODO: Complex<half> breaks because there's no half(int) constructor
-//template<> struct is_storage_type<half>          { enum { value = true  }; };
+#if BF_CUDA_ENABLED || BF_FLOAT16_ENABLED
+template<> struct is_storage_type<__half>          { enum { value = true  }; };
+#endif
 
 // WAR for no if constexpr() in C++11: type trait to detect Complex types
 template<typename T> struct is_complex           { enum { value = false }; };
@@ -168,8 +175,18 @@ Complex<T, typename Complex_detail::enable_if<Complex_detail::is_storage_type<T>
 	union { real_type y, imag; };
 	
 	inline __host__ __device__ Complex() {}
+#if BF_CUDA_ENABLED
+	// WAR for lack of __half(0) in early versions of cuda_fp16.h
+	inline __host__ __device__ Complex(real_type x_, real_type y_) : x(x_), y(y_) {}
+	inline __host__ __device__ Complex(real_type x_) : x(x_), y(real_type()) {}
+#else
 	inline __host__ __device__ Complex(real_type x_, real_type y_=0) : x(x_), y(y_) {}
+#endif
 };
+
+#if BF_CUDA_ENABLED || BF_FLOAT16_ENABLED
+typedef Complex<__half> Complex16;
+#endif
 
 // Special case for 4+4-bit storage
 struct FourBit {};
@@ -208,7 +225,9 @@ Complex<T, typename Complex_detail::enable_if<Complex_detail::is_floating_point<
 	inline __host__ __device__ Complex(Complex<signed char> c) : x(c.x), y(c.y) {}
 	inline __host__ __device__ Complex(Complex<short> c)       : x(c.x), y(c.y) {}
 	inline __host__ __device__ Complex(Complex<int> c)         : x(c.x), y(c.y) {}
-	//inline __device__ Complex(Complex<half> c) : x(__half2float(c.x)), y(__half2float(c.y)) {}
+#if BF_CUDA_ENABLED
+	inline __device__ Complex(Complex<__half> c) : x(__half2float(c.x)), y(__half2float(c.y)) {}
+#endif
 #ifdef __CUDACC_VER_MAJOR__
 	// Note: Use float2 to ensure vectorized load/store
 	inline __host__ __device__ Complex(typename Complex_detail::cuda_vector2_type<T>::type c) : x(c.x), y(c.y) {}

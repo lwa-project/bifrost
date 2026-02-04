@@ -746,6 +746,7 @@ VERBS_NPKTBUF
 HAVE_VERBS
 HAVE_VMA
 HAVE_HWLOC
+HAVE_FLOAT16
 HAVE_FLOAT128
 HAVE_OPENMP
 LIBOBJS
@@ -21308,12 +21309,27 @@ printf "%s\n" "#define HAVE_LONG_DOUBLE_WIDER 1" >>confdefs.h
 
 HAVE_FLOAT128=0
 
-if test x$HAVE_HAVE_LONG_DOUBLE_WIDER = x1
+if test x$HAVE_LONG_DOUBLE_WIDER = x1
 then :
   HAVE_FLOAT128=0
 
+fi # Disabled for now
+ac_fn_cxx_check_type "$LINENO" "_Float16" "ac_cv_type__Float16" "$ac_includes_default"
+if test "x$ac_cv_type__Float16" = xyes
+then :
+
+printf "%s\n" "#define HAVE__FLOAT16 1" >>confdefs.h
+
+
 fi
 
+HAVE_FLOAT16=0
+
+if test x$ac_cv_type__Float16 = xyes
+then :
+  HAVE_FLOAT16=1
+
+fi
 #
 # HWLOC
 #

@@ -350,6 +350,8 @@ BFstatus build_map_kernel(int*                 external_ndim,
 	options.push_back("--std="+cs_ss.str());
 	options.push_back("--device-as-default-execution-space");
 	options.push_back("--use_fast_math");
+	options.push_back("-DBF_CUDA_ENABLED=1");
+	options.push_back("-I" BF_CUDA_INCLUDE_DIR);
 	std::stringstream cc_ss;
 #if defined(BF_MAP_KERNEL_DISK_CACHE) && BF_MAP_KERNEL_DISK_CACHE
 	cc_ss << "compute_" << BF_GPU_MIN_ARCH;

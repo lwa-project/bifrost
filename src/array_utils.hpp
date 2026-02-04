@@ -65,6 +65,11 @@ inline std::string dtype2ctype_string(BFdtype dtype) {
 	case BF_DTYPE_U16:   return "unsigned short";
 	case BF_DTYPE_U32:   return "unsigned int";
 	case BF_DTYPE_U64:   return "unsigned long long";
+#if defined BF_CUDA_ENABLED && BF_CUDA_ENABLED
+	case BF_DTYPE_F16:   return "__half";
+#elif defined BF_FLOAT16_ENABLED && BF_FLOAT16_ENABLED
+	case BF_DTYPE_F16:   return "_Float16";
+#endif
 	case BF_DTYPE_F32:   return "float";
 	case BF_DTYPE_F64:   return "double";
 #if defined BF_FLOAT128_ENABLED && BF_FLOAT128_ENABLED
@@ -75,6 +80,11 @@ inline std::string dtype2ctype_string(BFdtype dtype) {
 	case BF_DTYPE_CI16:  return "Complex<short>";
 	case BF_DTYPE_CI32:  return "Complex<int>";
 	//case BF_DTYPE_CI64:  return "complex<long long>";
+#if defined BF_CUDA_ENABLED && BF_CUDA_ENABLED
+	case BF_DTYPE_CF16:  return "Complex<__half>";
+#elif defined BF_FLOAT16_ENABLED && BF_FLOAT16_ENABLED
+	case BF_DTYPE_CF16:   return "Complex<_Float16>";
+#endif
 	case BF_DTYPE_CF32:  return "Complex<float>";//complex<float>";
 	case BF_DTYPE_CF64:  return "Complex<double>";
 #if defined BF_FLOAT128_ENABLED && BF_FLOAT128_ENABLED

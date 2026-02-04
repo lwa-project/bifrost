@@ -88,9 +88,12 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 AC_TYPE_LONG_DOUBLE_WIDER
 AC_SUBST([HAVE_FLOAT128], [0])
-AS_IF([test x$HAVE_HAVE_LONG_DOUBLE_WIDER = x1],
-      [AC_SUBST([HAVE_FLOAT128], [0])])
-
+AS_IF([test x$HAVE_LONG_DOUBLE_WIDER = x1],
+      [AC_SUBST([HAVE_FLOAT128], [0])]) # Disabled for now
+AC_CHECK_TYPES([_Float16])
+AC_SUBST([HAVE_FLOAT16], [0])
+AS_IF([test x$ac_cv_type__Float16 = xyes],
+      [AC_SUBST([HAVE_FLOAT16], [1])])
 #
 # HWLOC
 #
