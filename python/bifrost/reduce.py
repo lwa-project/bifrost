@@ -33,6 +33,43 @@ from bifrost import telemetry
 telemetry.track_module()
 
 def reduce(idata: ndarray, odata: ndarray, op: str='sum') -> ndarray:
+    """Apply a reduction operation along one or more axes.
+
+    The output array should have the reduced dimensions set to size 1
+    to indicate which axes to reduce over.
+
+    Args:
+        idata: Input array to reduce.
+        odata: Output array with reduced dimensions set to 1.
+        op: Reduction operation, one of:
+
+            Basic reductions:
+                - ``'sum'``: sum(x)
+                - ``'mean'``: sum(x) / n
+                - ``'min'``: min(x)
+                - ``'max'``: max(x)
+                - ``'stderr'``: sum(x) / sqrt(n)
+
+            Power (magnitude-squared) reductions:
+                - ``'pwrsum'``: sum(|x|^2)
+                - ``'pwrmean'``: sum(|x|^2) / n
+                - ``'pwrmin'``: min(|x|^2)
+                - ``'pwrmax'``: max(|x|^2)
+                - ``'pwrstderr'``: sum(|x|^2) / sqrt(n)
+
+    Returns:
+        ndarray: The output array (same as odata).
+
+    **Tensor semantics**::
+
+        Input:  [..., M, ...], dtype = any numeric type, space = CUDA
+        Output: [..., 1, ...], dtype = any numeric type, space = CUDA
+
+    Example:
+        >>> # Sum over the last axis
+        >>> odata = ndarray(shape=(N, 1), dtype='f32', space='cuda')
+        >>> reduce(idata, odata, op='sum')
+    """
     try:
         op = getattr(_th.BFreduce_enum, op)
     except AttributeError:

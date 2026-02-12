@@ -34,6 +34,18 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class ReverseBlock(TransformBlock):
+    """Block that reverses data along specified axes.
+
+    Flips the data order along one or more axes, like numpy.flip().
+    Axis scales are adjusted to reflect the reversal.
+
+    Args:
+        iring: Input ring or block. Must be in CUDA space.
+        axes: Axis or list of axes to reverse (indices or labels).
+
+    See Also:
+        :func:`reverse`: Convenience function to create this block.
+    """
     def __init__(self, iring, axes, *args, **kwargs):
         super(ReverseBlock, self).__init__(iring, *args, **kwargs)
         if not isinstance(axes, list) or isinstance(axes, tuple):

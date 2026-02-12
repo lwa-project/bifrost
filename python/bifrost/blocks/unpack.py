@@ -39,6 +39,19 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class UnpackBlock(TransformBlock):
+    """Block that unpacks low-bit data to a larger data type.
+
+    Converts packed low-bit data (1, 2, or 4 bits per sample) to a
+    standard 8-bit format for easier processing.
+
+    Args:
+        iring: Input ring or block.
+        dtype: Output data type (e.g., 'i8', 'u8') or number of bits.
+        align_msb: If True, align unpacked values to the most significant bit.
+
+    See Also:
+        :func:`unpack`: Convenience function to create this block.
+    """
     def __init__(self, iring: Ring, dtype: Union[str,np.dtype], align_msb: bool=False,
                  *args, **kwargs):
         super(UnpackBlock, self).__init__(iring, *args, **kwargs)

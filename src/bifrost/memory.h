@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2016-2026, The Bifrost Authors. All rights reserved.
  * Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,11 @@
  */
 
 /*! \file memory.h
- *  \brief Space- (host/device) aware memory management/copy/set functions
+ *  \brief Memory space aware allocation and data transfer
+ *
+ *  This module provides memory management functions that work across
+ *  different memory spaces (system RAM, CUDA device, CUDA pinned host,
+ *  CUDA managed). Copy operations handle transfers between any spaces.
  */
 
 #ifndef BF_MEMORY_H_INCLUDE_GUARD_
@@ -40,27 +44,63 @@
 extern "C" {
 #endif
 
+/*! \brief Memory space identifiers */
 typedef enum BFspace_ {
-	BF_SPACE_AUTO         = 0,
-	BF_SPACE_SYSTEM       = 1, // aligned_alloc
-	BF_SPACE_CUDA         = 2, // cudaMalloc
-	BF_SPACE_CUDA_HOST    = 3, // cudaHostAlloc
-	BF_SPACE_CUDA_MANAGED = 4  // cudaMallocManaged
+	BF_SPACE_AUTO         = 0, /*!< Automatic space detection */
+	BF_SPACE_SYSTEM       = 1, /*!< System memory (aligned_alloc) */
+	BF_SPACE_CUDA         = 2, /*!< CUDA device memory (cudaMalloc) */
+	BF_SPACE_CUDA_HOST    = 3, /*!< CUDA pinned host memory (cudaHostAlloc) */
+	BF_SPACE_CUDA_MANAGED = 4  /*!< CUDA managed memory (cudaMallocManaged) */
 } BFspace;
 
+/*! \p bfMalloc allocates memory in the specified space
+ *
+ *  \param ptr   Pointer to receive the allocated memory
+ *  \param size  Number of bytes to allocate
+ *  \param space Memory space to allocate in
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfMalloc(void** ptr, BFsize size, BFspace space);
 BFstatus bfFree(void* ptr, BFspace space);
 
+/*! \p bfGetSpace determines the memory space of a pointer
+ *
+ *  \param ptr   Pointer to query
+ *  \param space Pointer to receive the memory space
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfGetSpace(const void* ptr, BFspace* space);
-
 const char* bfGetSpaceString(BFspace space);
 
-// Note: This is sync wrt host but async wrt device
+/*! \p bfMemcpy copies data between memory spaces
+ *
+ *  Synchronous with respect to the host, asynchronous with respect to device.
+ *
+ *  \param dst       Destination pointer
+ *  \param dst_space Destination memory space
+ *  \param src       Source pointer
+ *  \param src_space Source memory space
+ *  \param count     Number of bytes to copy
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfMemcpy(void*       dst,
                   BFspace     dst_space,
                   const void* src,
                   BFspace     src_space,
                   BFsize      count);
+
+/*! \p bfMemcpy2D copies 2D data between memory spaces
+ *
+ *  \param dst        Destination pointer
+ *  \param dst_stride Destination row stride in bytes
+ *  \param dst_space  Destination memory space
+ *  \param src        Source pointer
+ *  \param src_stride Source row stride in bytes
+ *  \param src_space  Source memory space
+ *  \param width      Width of each row in bytes
+ *  \param height     Number of rows to copy
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfMemcpy2D(void*       dst,
                     BFsize      dst_stride,
                     BFspace     dst_space,
@@ -79,6 +119,11 @@ BFstatus bfMemset2D(void*   ptr,
                     int     value,
                     BFsize  width,
                     BFsize  height);
+
+/*! \p bfGetAlignment returns the memory alignment used by bfMalloc
+ *
+ *  \return Alignment in bytes
+ */
 BFsize bfGetAlignment();
 
 #ifdef __cplusplus

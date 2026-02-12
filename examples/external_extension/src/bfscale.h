@@ -26,16 +26,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*! \file linalg.h
- *  \brief Linear algebra operations for multi-dimensional arrays
+/*
+ * Example Bifrost extension: bfScale
  *
- *  This module provides linear algebra routines including batched matrix
- *  multiplication. Operations are performed on the trailing dimensions
- *  of arrays, with leading dimensions treated as batch dimensions.
+ * Demonstrates how to create an external C extension that links against
+ * libifrost and operates on BFarray data.
  */
 
-#ifndef BF_LINALG_H_INCLUDE_GUARD_
-#define BF_LINALG_H_INCLUDE_GUARD_
+#ifndef BFSCALE_H_INCLUDE_GUARD_
+#define BFSCALE_H_INCLUDE_GUARD_
 
 #include <bifrost/common.h>
 #include <bifrost/array.h>
@@ -44,39 +43,27 @@
 extern "C" {
 #endif
 
-typedef struct BFlinalg_impl* BFlinalg;
-
-/*! \p bfLinAlgCreate allocates a new linear algebra context
+/*! \brief Scale array elements by a constant factor
  *
- *  \param handle_ptr Pointer to receive the context handle
- *  \return BF_STATUS_SUCCESS on success
+ *  Computes: out[i] = in[i] * scale for all elements
+ *
+ *  \param in     Input array (must be float32)
+ *  \param out    Output array (must be float32, same shape as input)
+ *  \param scale  Scale factor to apply
+ *  \return BF_STATUS_SUCCESS on success, error code otherwise
  */
-BFstatus bfLinAlgCreate(BFlinalg* handle_ptr);
-BFstatus bfLinAlgDestroy(BFlinalg handle);
+BFstatus bfScale(BFarray const* in, BFarray* out, float scale);
 
-/*! \p bfLinAlgMatMul performs batched matrix multiplication
+/*! \brief Get the version of this extension
  *
- *  Computes c = alpha * a.b + beta * c, where the multiplication is
- *  performed on the last two dimensions and leading dimensions are batched.
- *  If a is NULL, computes b^H.b. If b is NULL, computes a.a^H.
- *
- *  \param handle Linear algebra context
- *  \param alpha  Scalar multiplier for the product
- *  \param a      Input matrix a with shape [...,i,j], or NULL
- *  \param b      Input matrix b with shape [...,j,k], or NULL
- *  \param beta   Scalar multiplier for existing c values
- *  \param c      Output matrix with shape [...,i,k]
- *  \return BF_STATUS_SUCCESS on success
+ *  \param major  Pointer to store major version
+ *  \param minor  Pointer to store minor version
+ *  \return BF_STATUS_SUCCESS
  */
-BFstatus bfLinAlgMatMul(BFlinalg       handle,
-                        double         alpha,
-                        BFarray const* a,
-                        BFarray const* b,
-                        double         beta,
-                        BFarray const* c);
+BFstatus bfScaleGetVersion(int* major, int* minor);
 
 #ifdef __cplusplus
-} // extern "C"
+}
 #endif
 
-#endif // BF_LINALG_H_INCLUDE_GUARD_
+#endif // BFSCALE_H_INCLUDE_GUARD_

@@ -119,6 +119,19 @@ class BifrostReader(object):
         return nframe_read
 
 class DeserializeBlock(SourceBlock):
+    """Block that reads Bifrost's native serialization format.
+
+    Reads data written by :class:`SerializeBlock`, consisting of JSON
+    header files and binary data files.
+
+    Args:
+        filenames: List of input basenames (each ending with '.bf').
+        gulp_nframe: Number of frames to read per gulp.
+
+    See Also:
+        :func:`deserialize`: Convenience function to create this block.
+        :class:`SerializeBlock`: Block that writes this format.
+    """
     def __init__(self, filenames: List[str], gulp_nframe: int, *args, **kwargs):
         super(DeserializeBlock, self).__init__(filenames, gulp_nframe, *args, **kwargs)
     def create_reader(self, sourcename: str) -> BifrostReader:
@@ -168,8 +181,22 @@ def deserialize(filenames: List[str], gulp_nframe: int,
     """
     return DeserializeBlock(filenames, gulp_nframe, *args, **kwargs)
 
-# **TODO: Write a DeserializeBlock that does the inverse of this
 class SerializeBlock(SinkBlock):
+    """Block that writes data in Bifrost's native serialization format.
+
+    Writes sequence headers as JSON and data as binary files. This format
+    preserves all Bifrost metadata and supports ringlets.
+
+    Args:
+        iring: Input ring or block.
+        path: Output directory path.
+        max_file_size: Maximum bytes per data file (default 1GB).
+            Set to -1 for no limit.
+
+    See Also:
+        :func:`serialize`: Convenience function to create this block.
+        :class:`DeserializeBlock`: Block that reads this format.
+    """
     def __init__(self, iring: Ring, path: str, max_file_size: Optional[int]=None, *args, **kwargs):
         super(SerializeBlock, self).__init__(iring, *args, **kwargs)
         if path is None:

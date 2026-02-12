@@ -26,6 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*! \file array.h
+ *  \brief Multi-dimensional array structure and operations
+ *
+ *  This module defines the BFarray structure, which is the fundamental
+ *  data container for Bifrost operations, along with data type definitions
+ *  and basic array operations.
+ */
+
 #ifndef BF_ARRAY_H_INCLUDE_GUARD_
 #define BF_ARRAY_H_INCLUDE_GUARD_
 
@@ -36,6 +44,7 @@
 extern "C" {
 #endif
 
+/*! Maximum number of dimensions for BFarray */
 enum {
 	BF_MAX_DIMS = 8
 };
@@ -110,17 +119,22 @@ BFstatus bfDtypeInfo(BFdtype dtype, BFdtype_info* info_ptr);
 BFstatus bfDtypeInfoDestroy(BFdtype_info* info_ptr);
 
 
+/*! \brief Multi-dimensional array descriptor
+ *
+ *  BFarray is the fundamental data structure for Bifrost operations.
+ *  It describes the memory layout, data type, and location of array data.
+ */
 typedef struct BFarray_ {
-	void*    data;
-	BFspace  space;
-	BFdtype  dtype;
-	int      ndim;
-	long     shape[BF_MAX_DIMS];   // Elements
-	long     strides[BF_MAX_DIMS]; // Bytes
-	BFbool   immutable;
+	void*    data;                 /*!< Pointer to array data */
+	BFspace  space;                /*!< Memory space (system, cuda, etc.) */
+	BFdtype  dtype;                /*!< Data type (i8, f32, cf32, etc.) */
+	int      ndim;                 /*!< Number of dimensions (max BF_MAX_DIMS) */
+	long     shape[BF_MAX_DIMS];   /*!< Shape in elements per dimension */ // Elements
+	long     strides[BF_MAX_DIMS]; /*!< Strides in bytes per dimension */ // Bytes
+	BFbool   immutable;            /*!< If true, data cannot be modified */
 	//BFbool   big_endian; // TODO: Better to be 'native_endian' (or 'byteswap') instead?
-	BFbool   big_endian; // TODO: Better to be 'native_endian' (or 'byteswap') instead?
-	BFbool   conjugated;
+	BFbool   big_endian;           /*!< If true, data is big-endian */ // TODO: Better to be 'native_endian' (or 'byteswap') instead?
+	BFbool   conjugated;           /*!< If true, complex values are conjugated */
 	// TODO: Consider this. It could potentially be used for alpha/beta
 	//         in MatMul, and also for fixed-point numerics.
 	//double scale;
@@ -130,13 +144,40 @@ typedef struct BFarray_ {
 
 // Set space, dtype, ndim, shape
 // Ret data, strides
+/*! \p bfArrayMalloc allocates memory for an array
+ *
+ *  The caller must set space, dtype, ndim, and shape before calling.
+ *  On success, data and strides are filled in.
+ *
+ *  \param array Array descriptor with space, dtype, ndim, shape set
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfArrayMalloc(BFarray* array);
 
+/*! \p bfArrayFree releases memory allocated by bfArrayMalloc
+ *
+ *  \param array Array to free
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfArrayFree(const BFarray* array);
 
+/*! \p bfArrayCopy copies data between arrays
+ *
+ *  Handles copying between different memory spaces (e.g., CPU to GPU).
+ *
+ *  \param dst Destination array
+ *  \param src Source array
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfArrayCopy(const BFarray* dst,
                      const BFarray* src);
 
+/*! \p bfArrayMemset fills array memory with a byte value
+ *
+ *  \param array Array to fill
+ *  \param value Byte value to fill with
+ *  \return BF_STATUS_SUCCESS on success
+ */
 BFstatus bfArrayMemset(const BFarray* array,
                        int            value);
 

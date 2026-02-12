@@ -58,8 +58,23 @@ def _slugify(name):
 
 # TODO: Should probably move this elsewhere (e.g., utils)
 def split_shape(shape: Union[List[int],Tuple[int]]) -> Tuple[List[int], List[int]]:
-    """Splits a shape into its ringlet shape and frame shape
-    E.g., (2,3,-1,4,5) -> (2,3), (4,5)
+    """Split a shape into ringlet shape and frame shape.
+
+    The shape uses -1 as a sentinel to mark the time (frame) axis.
+    Dimensions before -1 are ringlet dimensions; after are frame dimensions.
+
+    Args:
+        shape: Full shape tuple with -1 marking the time axis.
+
+    Returns:
+        Tuple of (ringlet_shape, frame_shape).
+
+    Example:
+        >>> split_shape((2, 3, -1, 4, 5))
+        ([2, 3], [4, 5])
+
+    Raises:
+        ValueError: If no time dimension (-1) is found.
     """
     ringlet_shape = []
     for i, dim in enumerate(shape):
@@ -82,6 +97,23 @@ def ring_view(ring: "Ring", header_transform: Callable) -> "Ring":
     return new_ring
 
 class Ring(BifrostObject):
+    """Enhanced ring buffer with JSON header support and tensor semantics.
+
+    This is an alternative ring implementation (ring2) that adds:
+    - JSON-formatted headers with tensor metadata
+    - Automatic shape/dtype handling from headers
+    - Header transformation for views
+    - Frame-based indexing instead of byte-based
+
+    Args:
+        space: Memory space ('system', 'cuda', 'cuda_host').
+        name: Optional ring name. Auto-generated if None.
+        owner: Optional owner object reference.
+        core: Optional CPU core affinity.
+
+    See Also:
+        bifrost.ring.Ring: The lower-level ring implementation.
+    """
     instance_count = 0
     def __init__(self, space: str='system', name: Optional[str]=None, owner: Optional[Any]=None, core: Optional[int]=None):
         # If this is non-None, then the object is wrapping a base Ring instance
@@ -106,11 +138,23 @@ class Ring(BifrostObject):
         if self.base is not None and not self.is_view:
             BifrostObject.__del__(self)
     def view(self) -> "Ring":
+        """Create a view of this ring with independent header transforms.
+
+        Returns:
+            Ring: A new Ring that shares the same underlying buffer.
+        """
         new_ring = copy(self)
         new_ring.base = self
         new_ring.is_view = True
         return new_ring
     def resize(self, contiguous_bytes: int, total_bytes: Optional[int]=None, nringlet: int=1) -> None:
+        """Resize the ring buffer memory allocation.
+
+        Args:
+            contiguous_bytes: Minimum contiguous bytes for each operation.
+            total_bytes: Total buffer size. Defaults to contiguous_bytes.
+            nringlet: Number of independent data streams.
+        """
         _check( _bf.bfRingResize(self.obj,
                                  contiguous_bytes,
                                  total_bytes,

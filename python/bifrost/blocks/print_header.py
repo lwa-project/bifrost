@@ -34,12 +34,20 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class PrintHeaderBlock(SinkBlock):
+    """Block that prints sequence headers for debugging.
+
+    Prints the full header dictionary of each sequence to stdout.
+    Useful for inspecting data shape, dtype, and metadata during
+    pipeline development.
+
+    Args:
+        iring: Input ring or block.
+
+    See Also:
+        :func:`print_header`: Convenience function to create this block.
+    """
     lock = Lock()
     def __init__(self, iring, *args, **kwargs):
-        """Prints out the header of each new sequence of a ring
-
-        Called by :meth:`bifrost.blocks.print_header`
-        """
         super(PrintHeaderBlock, self).__init__(iring, *args, **kwargs)
     def on_sequence(self, iseq):
         ihdr = iseq.header

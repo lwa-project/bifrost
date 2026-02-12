@@ -33,22 +33,55 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class UDPSocket(BifrostObject):
+    """UDP socket wrapper for network I/O.
+
+    UDPSocket provides a Bifrost-managed UDP socket for use with
+    packet capture and transmit operations.
+
+    Example:
+        >>> sock = UDPSocket()
+        >>> sock.bind(Address('0.0.0.0', 4015))
+        >>> sock.timeout = 1.0  # 1 second timeout
+    """
     def __init__(self):
+        """Create a new UDP socket."""
         BifrostObject.__init__(self, _bf.bfUdpSocketCreate, _bf.bfUdpSocketDestroy)
     def bind(self, local_addr):
+        """Bind the socket to a local address.
+
+        Args:
+            local_addr: Address object specifying the local IP and port.
+        """
         _check( _bf.bfUdpSocketBind(self.obj, local_addr.obj) )
     def sniff(self, local_addr):
+        """Configure the socket for promiscuous sniffing.
+
+        Args:
+            local_addr: Address to sniff on.
+        """
         _check( _bf.bfUdpSocketSniff(self.obj, local_addr.obj) )
     def connect(self, remote_addr):
+        """Connect the socket to a remote address.
+
+        Args:
+            remote_addr: Address object specifying the remote IP and port.
+        """
         _check( _bf.bfUdpSocketConnect(self.obj, remote_addr.obj) )
     def shutdown(self):
+        """Shutdown the socket, disabling further sends/receives."""
         _check( _bf.bfUdpSocketShutdown(self.obj) )
     def close(self):
+        """Close the socket and release resources."""
         _check( _bf.bfUdpSocketClose(self.obj) )
     @property
     def mtu(self):
         return _get(_bf.bfUdpSocketGetMTU, self.obj)
     def fileno(self):
+        """Get the underlying file descriptor.
+
+        Returns:
+            int: The socket file descriptor.
+        """
         return _get(_bf.bfUdpSocketGetFD, self.obj)
     @property
     def timeout(self):

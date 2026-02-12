@@ -36,6 +36,22 @@ from bifrost import telemetry
 telemetry.track_module()
 
 class ScrunchBlock(TransformBlock):
+    """Block that averages consecutive frames together.
+
+    Reduces the time resolution by averaging ``factor`` input frames
+    into each output frame. Operates on CPU memory only.
+
+    Note:
+        Consider using :class:`ReduceBlock` instead for GPU-accelerated
+        reduction with more options.
+
+    Args:
+        iring: Input ring or block. Must be in system space.
+        factor: Number of input frames to average per output frame.
+
+    See Also:
+        :func:`scrunch`: Convenience function to create this block.
+    """
     def __init__(self, iring, factor, *args, **kwargs):
         super(ScrunchBlock, self).__init__(iring, *args, **kwargs)
         assert(type(factor) == int)
