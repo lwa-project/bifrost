@@ -26,6 +26,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import os
 import argparse
 
 from bifrost import __version__, __copyright__, __license__
@@ -48,6 +49,9 @@ if args.config:
     print(" Mellanox messaging accelerator (VMA) support: %s" % _yes_no(BF_VMA_ENABLED))
     print(" Infiniband verbs support: %s" % _yes_no(BF_VERBS_ENABLED))
     print(" RDMA ring transport support: %s" % _yes_no(BF_RDMA_ENABLED))
+    print(" Mapped ring directory: %s" % BF_MAPPED_RING_DIR)
+    if os.getenv('BIFROST_MAPPED_DIR') is not None:
+        print("  Mapped ring directory override: %s" % os.getenv('BIFROST_MAPPED_DIR'))
     print(" Logging directory: %s" % BF_PROCLOG_DIR)
     print(" Debugging: %s" % _yes_no(BF_DEBUG_ENABLED))
     print(" CUDA support: %s" % _yes_no(BF_CUDA_ENABLED))
