@@ -141,12 +141,21 @@ AS_IF([test x$enable_verbs != xno],
 
  AC_ARG_WITH([rx-buffer-size],
             [AS_HELP_STRING([--with-rx-buffer-size=N],
-                            [default Infiniband verbs receive buffer size in packets (default=8192)])],
+                            [default Infiniband verbs receive buffer size in packets (default=32768)])],
             [],
-            [with_rx_buffer_size=8192])
+            [with_rx_buffer_size=32768])
  AC_SUBST([VERBS_NPKTBUF], [$with_rx_buffer_size])
  AS_IF([test x$HAVE_VERBS = x0],
        [AC_SUBST([VERBS_NPKTBUF], [0])])
+
+ AC_ARG_WITH([verbs-wcbatch],
+            [AS_HELP_STRING([--with-verbs-wcbatch=N],
+                            [default Infiniband verbs completion queue batch size (default=64)])],
+            [],
+            [with_verbs_wcbatch=64])
+ AC_SUBST([VERBS_WCBATCH], [$with_verbs_wcbatch])
+ AS_IF([test x$HAVE_VERBS = x0],
+       [AC_SUBST([VERBS_WCBATCH], [0])])
 
  AC_ARG_WITH([tx-buffer-size],
             [AS_HELP_STRING([--with-tx-buffer-size=N],

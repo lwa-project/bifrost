@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2020-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -72,6 +72,8 @@
 #endif
 
 #define BF_VERBS_SEND_PAYLOAD_OFFSET 42
+
+#define BF_VERBS_SENDMMSG_HEADERS_CHANGED 0x1000
 
 struct bf_ibv_send_pkt{
     ibv_send_wr wr;
@@ -152,6 +154,7 @@ class VerbsSend {
     int         _timeout;
     uint32_t    _rate_limit;
     bf_ibv_send _verbs;
+    size_t      _udp_hdr_size;
     
     void get_interface_name(char* name) {
         sockaddr_in sin;
@@ -708,7 +711,8 @@ public:
     };
     
     VerbsSend(int fd, size_t pkt_size_max)
-        : _fd(fd), _pkt_size_max(pkt_size_max), _timeout(1), _rate_limit(0) {
+        : _fd(fd), _pkt_size_max(pkt_size_max), _timeout(1), _rate_limit(0),
+          _udp_hdr_size(0) {
             _timeout = get_timeout_ms();
             
             ::memset(&_verbs, 0, sizeof(_verbs));
@@ -798,6 +802,7 @@ public:
     inline int sendmmsg(mmsghdr *mmsg, int npackets, int flags=0) {
       int ret;
       bf_ibv_send_pkt* head;
+      bf_ibv_send_pkt* pkt;
       ibv_send_wr *s;
       
       if( npackets > BF_VERBS_SEND_NPKTBUF ) {
@@ -806,27 +811,38 @@ public:
       
       // Reclaim a set of buffers to use
       head = this->get_packet_buffers(npackets);
-      
-      // Load in the new data
+
+      // Load in the new data - walk the buffer chain instead of assuming sequential indices
+      // If ethernet/IP/UDP headers are pre-populated, skip the first memcpy
       int i;
       uint64_t offset;
-      for(i=0; i<npackets; i++) {
+      uint8_t* buf;
+      pkt = head;
+      for(i=0; i<npackets && pkt; i++) {
+          buf = (uint8_t*) pkt->sg.addr;
           offset = 0;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
-                   mmsg[i].msg_hdr.msg_iov[0].iov_base,
-                   mmsg[i].msg_hdr.msg_iov[0].iov_len);
-          offset += mmsg[i].msg_hdr.msg_iov[0].iov_len;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
+          if( flags & BF_VERBS_SENDMMSG_HEADERS_CHANGED ) {
+              // Only load the ethernet/IP/UDP header if requested.  This still
+              // requires the user to provide the header every call but it skips
+              // the extra memcpy calls.
+              ::memcpy(buf + offset,
+                       mmsg[i].msg_hdr.msg_iov[0].iov_base,
+                       mmsg[i].msg_hdr.msg_iov[0].iov_len);
+              _udp_hdr_size = mmsg[i].msg_hdr.msg_iov[0].iov_len;
+          }
+          offset += _udp_hdr_size;
+          ::memcpy(buf + offset,
                    mmsg[i].msg_hdr.msg_iov[1].iov_base,
                    mmsg[i].msg_hdr.msg_iov[1].iov_len);
           offset += mmsg[i].msg_hdr.msg_iov[1].iov_len;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
+          ::memcpy(buf + offset,
                    mmsg[i].msg_hdr.msg_iov[2].iov_base,
                    mmsg[i].msg_hdr.msg_iov[2].iov_len);
           offset += mmsg[i].msg_hdr.msg_iov[2].iov_len;
-          _verbs.pkt_buf[i].sg.length = offset;
+          pkt->sg.length = offset;
+          pkt = (bf_ibv_send_pkt*) pkt->wr.next;
       }
-      
+
       // Queue for sending
       ret = ibv_post_send(_verbs.qp[0], &(head->wr), &s);
       if( ret ) {

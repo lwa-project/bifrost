@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2025, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -72,7 +72,7 @@ public:
 	    pkt->sync         = pkt_hdr->sync_word;
 	    pkt->time_tag     = be64toh(pkt_hdr->time_tag);
 	    pkt->decimation   = be32toh(pkt_hdr->navg);
-	    pkt->seq          = pkt->time_tag / 196000000 / (pkt->decimation / 100);
+	    pkt->seq          = pkt->time_tag / pkt->decimation;
 	    pkt->nsrc         = _nsrc;
 	    pkt->src          = (stand0*(2*(nstand-1)+1-stand0)/2 + stand1 + 1 - _src0)*nserver \
 	                        + (server - 1);
