@@ -126,7 +126,8 @@ def get_statistics(blockList, prevList):
             except KeyError:
                 prev = curr
 
-        elif block.find('udp_transmit') != -1:
+        elif block.find('udp_transmit') != -1 \
+             or  block.find('udp_verbs_transmit') != -1:
             ## udp_transmit is TX
             good = True
             type = 'tx'

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,6 +47,7 @@
 
 #include <sys/mman.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include <fstream>
 #include <chrono>
@@ -116,31 +117,62 @@ public:
 };
 
 class DiskPacketWriter : public PacketWriterMethod {
+    int      _last_count;
+    iovec*   _iovs;
 public:
     DiskPacketWriter(int fd, size_t max_burst_size=BF_SEND_NPKTBURST, int core=-1)
-     : PacketWriterMethod(fd, max_burst_size, core) {}
+     : PacketWriterMethod(fd, max_burst_size, core), _last_count(0), _iovs(NULL) {}
+     ~DiskPacketWriter() {
+       if( _iovs ) {
+         ::munlock(_iovs, sizeof(struct iovec)*2*_last_count);
+         free(_iovs);
+       }
+     }
     ssize_t send_packets(char* hdrs, 
                          int   hdr_size,
                          char* data, 
                          int   data_size, 
                          int   npackets,
                          int   flags=0) {
+        if( npackets > _last_count ) {
+           if( _max_burst_size > 0 ) {
+             _max_burst_size = std::min(_max_burst_size, (size_t) IOV_MAX/2);
+           } else {
+              // Divide by two since there is a header and a payload
+             _max_burst_size = IOV_MAX/2;
+           }
+           
+           if( _iovs ) {
+             ::munlock(_iovs, sizeof(struct iovec)*2*_last_count);
+             free(_iovs);
+           }
+           
+           _last_count = npackets;
+           _iovs = (struct iovec *) malloc(sizeof(struct iovec)*2*npackets);
+           ::mlock(_iovs, sizeof(struct iovec)*2*npackets);
+        }
+         
+        for(int i=0; i<npackets; i++) {
+             _iovs[2*i+0].iov_base = (hdrs + i*hdr_size);
+             _iovs[2*i+0].iov_len = hdr_size;
+             _iovs[2*i+1].iov_base = (data + i*data_size);
+             _iovs[2*i+1].iov_len = data_size;
+        }
+        
         int i = 0;
-        ssize_t status, nsend, nsent = 0;
+        ssize_t nsend, nsent_batch, nsent = 0;
         while(npackets > 0) {
             _limiter.begin();
-            if( _max_burst_size > 0 ) {
-                nsend = std::min(_max_burst_size, (size_t) npackets);
-            } else {
-                nsend = npackets;
+            nsend = std::min(_max_burst_size, (size_t) npackets);
+            nsent_batch = ::writev(_fd, _iovs+2*i, 2*nsend);
+            if( nsent_batch > 0 ) {
+                nsent += nsent_batch / (hdr_size + data_size);
             }
-            for(int j=0; j<nsend; j++) {
-                status = ::write(_fd, hdrs+hdr_size*(i+j), hdr_size);
-                if( status != hdr_size ) continue;
-                status = ::write(_fd, data+data_size*(i+j), data_size);
-                if( status != data_size ) continue;
-                nsent += 1;
+            /*
+            if( nsent_batch == -1 ) {
+                std::cout << "writev failed: " << std::strerror(errno) << " with " << hdr_size << " and " << data_size << std::endl;
             }
+            */
             i += nsend;
             npackets -= nsend;
             _limiter.end_and_wait(nsend);
@@ -172,6 +204,12 @@ public:
                          int   npackets,
                          int   flags=0) {
         if( npackets > _last_count ) {
+          if( _max_burst_size > 0 ) {
+            _max_burst_size = std::min(_max_burst_size, (size_t) IOV_MAX);
+          } else {
+            _max_burst_size = IOV_MAX;
+          }
+          
           if( _mmsg ) {
             ::munlock(_mmsg, sizeof(struct mmsghdr)*_last_count);
             free(_mmsg);
@@ -206,11 +244,7 @@ public:
         ssize_t nsend, nsent_batch, nsent = 0;
         while(npackets > 0) {
             _limiter.begin();
-            if( _max_burst_size > 0 ) {
-                nsend = std::min(_max_burst_size, (size_t) npackets);
-            } else {
-                nsend = npackets;
-            }
+            nsend = std::min(_max_burst_size, (size_t) npackets);
             nsent_batch = ::sendmmsg(_fd, _mmsg+i, nsend, flags);
             if( nsent_batch > 0 ) {
                 nsent += nsent_batch;
@@ -259,6 +293,12 @@ public:
                          int   npackets,
                          int   flags=0) {
         if( npackets > _last_count ) {
+          if( _max_burst_size > 0 ) {
+            _max_burst_size = std::min(_max_burst_size, (size_t) BF_VERBS_SEND_NPKTBUF);
+          } else {
+            _max_burst_size = BF_VERBS_SEND_NPKTBUF;
+          }
+          
           if( _mmsg ) {
             ::munlock(_mmsg, sizeof(struct mmsghdr)*_last_count);
             free(_mmsg);
@@ -287,12 +327,14 @@ public:
             _ibv.get_ethernet_header(&(_udp_hdr.ethernet));
             _ibv.get_ipv4_header(&(_udp_hdr.ipv4), _last_size);
             _ibv.get_udp_header(&(_udp_hdr.udp), _last_size);
-            
+
+            flags |= BF_VERBS_SENDMMSG_HEADERS_CHANGED;
+
             if( _limiter.get_rate() > 0 ) {
                 _ibv.set_rate_limit(_limiter.get_rate()*_last_size, _last_size, _max_burst_size);
             }
         }
-        
+
         for(int i=0; i<npackets; i++) {
             _iovs[3*i+0].iov_base = &_udp_hdr;
             _iovs[3*i+0].iov_len = sizeof(bf_comb_udp_hdr);
@@ -301,13 +343,11 @@ public:
             _iovs[3*i+2].iov_base = (data + i*data_size);
             _iovs[3*i+2].iov_len = data_size;
         }
-        
+
         ssize_t nsent = _ibv.sendmmsg(_mmsg, npackets, flags);
-        /*
         if( nsent == -1 ) {
             std::cout << "sendmmsg failed: " << std::strerror(errno) << " with " << hdr_size << " and " << data_size << std::endl;
         }
-        */
         
         return nsent;
     }
@@ -562,6 +602,22 @@ public:
     }
 };
 
+template<int16_t NSTAND>
+class BFpacketwriter_tbx_impl : public BFpacketwriter_impl {
+    int16_t            _nstand = NSTAND;
+    int16_t            _nchan;
+    ProcLog            _type_log;
+public:
+    inline BFpacketwriter_tbx_impl(PacketWriterThread* writer,
+                                   int                 nsamples)
+     : BFpacketwriter_impl(writer, nullptr, nsamples, BF_DTYPE_CI4),
+       _nchan(0), _type_log((std::string(writer->get_name())+"/type").c_str()) {
+        _filler = new TBXHeaderFiller<NSTAND>();
+        _nchan = nsamples / 2 / _nstand;
+        _type_log.update("type : %s%i_%i\n", "tbx", _nstand, _nchan);
+    }
+};
+
 class BFpacketwriter_vbeam_impl : public BFpacketwriter_impl {
     ProcLog            _type_log;
 public:
@@ -607,6 +663,13 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
         nsamples = 4096;
     } else if( format == std::string("tbf") ) {
         nsamples = 6144;
+    } else if( std::string(format).substr(0, 3) == std::string("tbx") ) {
+        // e.g. "tbx256_16" is 16 channels from 256 stands (512 inputs)
+        std::string sfmt = std::string(format);
+        size_t delim = sfmt.find('_');
+        int nstand = std::atoi(sfmt.substr(3, delim).c_str());
+        int nchan = std::atoi(sfmt.substr(delim+1, sfmt.length()).c_str());
+        nsamples = 2*nstand*nchan;
     } else if( std::string(format).substr(0, 6) == std::string("vbeam_") ) {
         // e.g. "vbeam_184" is a 184-channel voltage beam"
         int nchan = std::atoi((std::string(format).substr(13, std::string(format).length())).c_str());
@@ -666,6 +729,15 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
     } else if( std::string(format).substr(0, 3) == std::string("tbf")  ) {
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbf_impl(writer, nsamples),
                            *obj = 0);
+#define MATCH_TBX_MODE(NSTAND) \
+    } else if( std::string(format).substr(0, 6) == std::string("tbx"#NSTAND"_") \
+               || std::string(format).substr(0, 7) == std::string("tbx"#NSTAND"_") ) { \
+        BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbx_impl<NSTAND>(writer, nsamples), \
+                           *obj = 0);
+    MATCH_TBX_MODE(64)
+    MATCH_TBX_MODE(128)
+    MATCH_TBX_MODE(256)
+#undef MATCH_TBX_MODE
     } else if( std::string(format).substr(0, 6) == std::string("vbeam_") ) {
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_vbeam_impl(writer, nsamples),
                            *obj = 0);

@@ -1,4 +1,4 @@
-AC_INIT([bifrost], [0.10.0], [], [], [https://github.com/ledatelescope/bifrost/])
+AC_INIT([bifrost], [0.10.0], [], [], [https://github.com/lwa-project/bifrost/])
 AC_LANG(C++)
 AC_CONFIG_SRCDIR([src/cuda.cpp])
 
@@ -26,10 +26,10 @@ AX_WITH_PROG(CTAGS, ctags)
 AS_IF([test x${CTAGS} = x],
       [AC_MSG_ERROR([Required program ctags was not found])],
       [])
-AC_MSG_CHECKING([whether ${CTAGS} is exuberant])
+AC_MSG_CHECKING([whether ${CTAGS} is sufficiently exuberant])
 AS_IF([! ${CTAGS} --version | grep -q Exuberant],
       [AC_MSG_RESULT([no])
-       AC_MSG_ERROR([exuberant ctags is required, but ${CTAGS} is a different version])],
+       AC_MSG_ERROR([exuberant/universal ctags is required, but ${CTAGS} is a different version])],
       [AC_MSG_RESULT([yes])])
 
 AC_SUBST(SO_EXT, $shrext_cmds)
@@ -141,12 +141,21 @@ AS_IF([test x$enable_verbs != xno],
 
  AC_ARG_WITH([rx-buffer-size],
             [AS_HELP_STRING([--with-rx-buffer-size=N],
-                            [default Infiniband verbs receive buffer size in packets (default=8192)])],
+                            [default Infiniband verbs receive buffer size in packets (default=32768)])],
             [],
-            [with_rx_buffer_size=8192])
+            [with_rx_buffer_size=32768])
  AC_SUBST([VERBS_NPKTBUF], [$with_rx_buffer_size])
  AS_IF([test x$HAVE_VERBS = x0],
        [AC_SUBST([VERBS_NPKTBUF], [0])])
+
+ AC_ARG_WITH([verbs-wcbatch],
+            [AS_HELP_STRING([--with-verbs-wcbatch=N],
+                            [default Infiniband verbs completion queue batch size (default=64)])],
+            [],
+            [with_verbs_wcbatch=64])
+ AC_SUBST([VERBS_WCBATCH], [$with_verbs_wcbatch])
+ AS_IF([test x$HAVE_VERBS = x0],
+       [AC_SUBST([VERBS_WCBATCH], [0])])
 
  AC_ARG_WITH([tx-buffer-size],
             [AS_HELP_STRING([--with-tx-buffer-size=N],
@@ -262,7 +271,8 @@ AS_IF([test x$enable_trace != xno],
 
 AX_CHECK_SSE
 AX_CHECK_AVX
-AX_CHECK_AVX512
+#AX_CHECK_AVX512
+AC_SUBST([HAVE_AVX512], [0])
 AX_CHECK_NATIVE_ARCH
 
 AC_ARG_ENABLE([cuda_debug],
@@ -283,6 +293,17 @@ AC_ARG_ENABLE([map_cache],
 AC_SUBST([HAVE_MAP_CACHE], [0])
 AS_IF([test x$enable_map_cache != xno],
       [AC_SUBST([HAVE_MAP_CACHE], [$HAVE_CUDA])])
+
+
+AC_ARG_WITH([map_cache_dir],
+            [AS_HELP_STRING([--with-map-cache-dir],
+                            [directory for the bifrost.map kernels (default=~/.bifrost)])],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="#define BF_MAP_KERNEL_DISK_CACHE_DIR \"$withval\""
+             with_map_cache_dir=$withval],
+            [BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE="/* BF_MAP_KERNEL_DISK_CACHE_DIR not defined - using default */"
+             with_map_cache_dir=0])
+AC_SUBST([BF_MAP_KERNEL_DISK_CACHE_DIR_DEFINE])
+AC_SUBST([MAP_CACHE_DIR], [$with_map_cache_dir])
 
 #
 # Python
@@ -507,7 +528,9 @@ AS_IF([test x$enable_native_arch != xno],
 AS_IF([test x$HAVE_FLOAT128 != x0],
       [AC_SUBST([OPTIONS], ["$OPTIONS float128"])])
 AS_IF([test x$enable_map_cache != xno],
-      [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])
+      [AS_IF([test x$MAP_CACHE_DIR != x0],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache@$MAP_CACHE_DIR"])],
+       [AC_SUBST([OPTIONS], ["$OPTIONS map_cache"])])])
 AC_MSG_NOTICE(options:$OPTIONS)
       
 echo ""

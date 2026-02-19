@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2020-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,11 +51,11 @@
 #endif
 
 #ifndef BF_VERBS_NPKTBUF
-#define BF_VERBS_NPKTBUF 8192
+#define BF_VERBS_NPKTBUF 32768
 #endif
 
 #ifndef BF_VERBS_WCBATCH
-#define BF_VERBS_WCBATCH 16
+#define BF_VERBS_WCBATCH 64
 #endif
 
 #define BF_VERBS_PAYLOAD_OFFSET 42

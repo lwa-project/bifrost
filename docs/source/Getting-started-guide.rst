@@ -93,11 +93,11 @@ has been tested against.
 Other Dependencies
 ^^^^^^^^^^^^^^^^^^
 
-- exuberant-ctags
+- universal-ctags
 - Basic build tools (make, gcc, etc.)
 
 On Ubuntu, the following command should grab everything you need: 
-    ``sudo apt-get install build-essential software-properties-common exuberant-ctags``
+    ``sudo apt-get install build-essential software-properties-common universal-ctags``
 
 Bifrost install
 ~~~~~~~~~~~~~~~
@@ -105,7 +105,7 @@ Bifrost install
 Now you are ready to install Bifrost. Clone the GitHub master branch
 with
 
-``git clone https://github.com/ledatelescope/bifrost``.
+``git clone https://github.com/lwa-project/bifrost``.
 
 You will want to run `configure` to tailor Bifrost to you system.  At the end of
 `configure` you will get a summary of how Bifrost will be built:

@@ -151,7 +151,7 @@ AC_DEFUN([AX_CHECK_CUDA],
     CXXFLAGS="$CXXFLAGS -DBF_CUDA_ENABLED=1"
     NVCCFLAGS="$NVCCFLAGS -DBF_CUDA_ENABLED=1"
     LDFLAGS="$LDFLAGS -L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
-    NVCCLIBS="$NVCCLIBS -lcuda -lcudart -lnvrtc -lcublas -lcudadevrt -L. -lcufft_static_pruned -lculibos -lnvToolsExt"
+    NVCCLIBS="$NVCCLIBS -lcuda -lcudart -lnvrtc -lcublas -lcudadevrt -L. -lcufft_static_pruned -lculibos"
   fi
   
   AC_ARG_WITH([gpu_archs],
@@ -229,9 +229,16 @@ AC_DEFUN([AX_CHECK_CUDA],
       NVCCLIBS="$NVCCLIBS_save"
       ac_ext="$ac_ext_save"
     else
-      AC_SUBST([GPU_ARCHS], [$with_gpu_archs])
+      # Expand user-provided architectures to include base versions required by cuFFT pruning
+      ar_expanded=""
+      for arch in $with_gpu_archs; do
+        base=$(( (arch / 10) * 10 ))
+        ar_expanded="$ar_expanded $base $arch"
+      done
+      ar_expanded=$( echo $ar_expanded | xargs -n1 | sort -n | uniq | xargs )
+      AC_SUBST([GPU_ARCHS], [$ar_expanded])
     fi
-    
+
     AC_MSG_CHECKING([for valid requested CUDA architectures])
     ar_requested=$( echo "$GPU_ARCHS" | wc -w )
     ar_valid=$( echo $GPU_ARCHS $ar_supported | xargs -n1 | sort | uniq -d | xargs )
@@ -341,9 +348,38 @@ AC_DEFUN([AX_CHECK_CUDA],
     LDFLAGS="$LDFLAGS_save"
     NVCCLIBS="$NVCCLIBS_save"
     ac_ext="$ac_ext_save"
+    
+    AC_MSG_CHECKING([for header-only NVTX version])
+    CXXFLAGS_save="$CXXFLAGS"
+    LDFLAGS_save="$LDFLAGS"
+    NVCCLIBS_save="$NVCCLIBS"
+    ac_ext_save="$ac_ext"
+
+    LDFLAGS="-L$CUDA_HOME/lib64 -L$CUDA_HOME/lib"
+    NVCCLIBS="-lcuda -lcudart -lnvToolsExt"
+    ac_ext="cu"
+    ac_run='$NVCC -o conftest$ac_ext $LDFLAGS $LIBS $NVCCLIBS conftest.$ac_ext>&5'
+    AC_RUN_IFELSE([
+      AC_LANG_PROGRAM([[
+          #include <cuda.h>
+          #include <cuda_runtime.h>
+          #include <thrust/system/cuda/memory.h>]],
+          [[]])],
+          [AC_SUBST([GPU_HEADERONLY_NVTX], [0])
+           NVCCLIBS_save="$NVCCLIBS_save -lnvToolsExt"
+           AC_MSG_RESULT([no])],
+          [AC_SUBST([GPU_HEADERONLY_NVTX], [1])
+           AC_MSG_RESULT([yes])])
+
+    CXXFLAGS="$CXXFLAGS_save"
+    LDFLAGS="$LDFLAGS_save"
+    NVCCLIBS="$NVCCLIBS_save"
+    ac_ext="$ac_ext_save"
+    
   else
      AC_SUBST([GPU_PASCAL_MANAGEDMEM], [0])
      AC_SUBST([GPU_EXP_PINNED_ALLOC], [1])
+     AC_SUBST([GPU_HEADERONLY_NVTX], [0])
   fi
   
   ac_compile="$ac_compile_save"
