@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -327,12 +327,14 @@ public:
             _ibv.get_ethernet_header(&(_udp_hdr.ethernet));
             _ibv.get_ipv4_header(&(_udp_hdr.ipv4), _last_size);
             _ibv.get_udp_header(&(_udp_hdr.udp), _last_size);
-            
+
+            flags |= BF_VERBS_SENDMMSG_HEADERS_CHANGED;
+
             if( _limiter.get_rate() > 0 ) {
                 _ibv.set_rate_limit(_limiter.get_rate()*_last_size, _last_size, _max_burst_size);
             }
         }
-        
+
         for(int i=0; i<npackets; i++) {
             _iovs[3*i+0].iov_base = &_udp_hdr;
             _iovs[3*i+0].iov_len = sizeof(bf_comb_udp_hdr);
@@ -341,22 +343,10 @@ public:
             _iovs[3*i+2].iov_base = (data + i*data_size);
             _iovs[3*i+2].iov_len = data_size;
         }
-        
-        int i = 0;
-        ssize_t nsend, nsent_batch, nsent = 0;
-        while(npackets > 0) {
-            nsend = std::min(_max_burst_size, (size_t) npackets);
-            nsent_batch = _ibv.sendmmsg(_mmsg+i, nsend, flags);
-            if( nsent_batch > 0 ) {
-                nsent += nsent_batch;
-            }
-            /*
-            if( nsent_batch == -1 ) {
-                std::cout << "sendmmsg failed: " << std::strerror(errno) << " with " << hdr_size << " and " << data_size << std::endl;
-            }
-            */
-            i += nsend;
-            npackets -= nsend;
+
+        ssize_t nsent = _ibv.sendmmsg(_mmsg, npackets, flags);
+        if( nsent == -1 ) {
+            std::cout << "sendmmsg failed: " << std::strerror(errno) << " with " << hdr_size << " and " << data_size << std::endl;
         }
         
         return nsent;
@@ -612,6 +602,22 @@ public:
     }
 };
 
+template<int16_t NSTAND>
+class BFpacketwriter_tbx_impl : public BFpacketwriter_impl {
+    int16_t            _nstand = NSTAND;
+    int16_t            _nchan;
+    ProcLog            _type_log;
+public:
+    inline BFpacketwriter_tbx_impl(PacketWriterThread* writer,
+                                   int                 nsamples)
+     : BFpacketwriter_impl(writer, nullptr, nsamples, BF_DTYPE_CI4),
+       _nchan(0), _type_log((std::string(writer->get_name())+"/type").c_str()) {
+        _filler = new TBXHeaderFiller<NSTAND>();
+        _nchan = nsamples / 2 / _nstand;
+        _type_log.update("type : %s%i_%i\n", "tbx", _nstand, _nchan);
+    }
+};
+
 class BFpacketwriter_vbeam_impl : public BFpacketwriter_impl {
     ProcLog            _type_log;
 public:
@@ -657,6 +663,13 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
         nsamples = 4096;
     } else if( format == std::string("tbf") ) {
         nsamples = 6144;
+    } else if( std::string(format).substr(0, 3) == std::string("tbx") ) {
+        // e.g. "tbx256_16" is 16 channels from 256 stands (512 inputs)
+        std::string sfmt = std::string(format);
+        size_t delim = sfmt.find('_');
+        int nstand = std::atoi(sfmt.substr(3, delim).c_str());
+        int nchan = std::atoi(sfmt.substr(delim+1, sfmt.length()).c_str());
+        nsamples = 2*nstand*nchan;
     } else if( std::string(format).substr(0, 6) == std::string("vbeam_") ) {
         // e.g. "vbeam_184" is a 184-channel voltage beam"
         int nchan = std::atoi((std::string(format).substr(13, std::string(format).length())).c_str());
@@ -716,6 +729,15 @@ BFstatus BFpacketwriter_create(BFpacketwriter* obj,
     } else if( std::string(format).substr(0, 3) == std::string("tbf")  ) {
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbf_impl(writer, nsamples),
                            *obj = 0);
+#define MATCH_TBX_MODE(NSTAND) \
+    } else if( std::string(format).substr(0, 6) == std::string("tbx"#NSTAND"_") \
+               || std::string(format).substr(0, 7) == std::string("tbx"#NSTAND"_") ) { \
+        BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_tbx_impl<NSTAND>(writer, nsamples), \
+                           *obj = 0);
+    MATCH_TBX_MODE(64)
+    MATCH_TBX_MODE(128)
+    MATCH_TBX_MODE(256)
+#undef MATCH_TBX_MODE
     } else if( std::string(format).substr(0, 6) == std::string("vbeam_") ) {
         BF_TRY_RETURN_ELSE(*obj = new BFpacketwriter_vbeam_impl(writer, nsamples),
                            *obj = 0);
