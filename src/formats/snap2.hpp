@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -117,6 +117,8 @@ public:
 };
 
 class SNAP2Processor : virtual public PacketProcessor {
+    int _npol     = 0;
+    int _npol_tot = 0;
 public:
     inline void operator()(const PacketDesc* pkt,
                            uint64_t          seq0,
@@ -132,6 +134,8 @@ public:
             ngood_bytes[obuf_idx]               += nbyte;
             src_ngood_bytes[obuf_idx][pkt->src] += nbyte;
             int payload_size = pkt->payload_size;
+            _npol     = pkt->npol;
+            _npol_tot = pkt->npol_tot;
         
             size_t obuf_offset = (pkt->seq-obuf_seq0)*pkt->nsrc*payload_size;
             typedef unaligned256_type itype; //256 bits = 32 pols / word
@@ -181,21 +185,33 @@ public:
                                  int      nchan,
                                  int      nseq) {
             typedef aligned256_type otype;
-            otype* __restrict__ ptr = (otype*)data + 2*src;
-            int count = nseq * nchan;
+            if( _npol <= 0 || _npol_tot < _npol ) {
+                return;
+            }
+            const int npol_blocks   = _npol_tot / _npol;
+            const int nchan_blocks  = nsrc / npol_blocks;
+            const int chan_block    = src / npol_blocks;
+            const int pol_block     = src % npol_blocks;
+            const int words_per_src = _npol / (int)sizeof(otype);  // 2 for 64 inputs
+            const size_t words_per_chan = _npol_tot / sizeof(otype);
+            const size_t nchan_tot  = (size_t)nchan * nchan_blocks;
+            otype* __restrict__ base = (otype*)data + pol_block*words_per_src;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i zero = _mm256_setzero_si256();
-            for( int i=0; i<count; ++i ) {
-                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+0), zero);
-                   _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+1), zero);
-                   ptr += 2*nsrc;
-            }
-#else
-            for( int i=0; i<count; ++i ) {
-                   ::memset(ptr, 0, 2*sizeof(otype));
-                   ptr += 2*nsrc;
-            }
 #endif
+            for( int t=0; t<nseq; ++t ) {
+                otype* ptr = base + (t*nchan_tot + (size_t)chan_block*nchan)*words_per_chan;
+                for( int c=0; c<nchan; ++c ) {
+#if defined BF_AVX_ENABLED && BF_AVX_ENABLED
+                    for( int w=0; w<words_per_src; ++w ) {
+                        _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+w), zero);
+                    }
+#else
+                    ::memset(ptr, 0, words_per_src*sizeof(otype));
+#endif
+                    ptr += words_per_chan;
+                }
+            }
     }
 };
 
