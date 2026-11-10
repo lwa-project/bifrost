@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2020-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -72,6 +72,8 @@
 #endif
 
 #define BF_VERBS_SEND_PAYLOAD_OFFSET 42
+
+#define BF_VERBS_SENDMMSG_HEADERS_CHANGED 0x1000
 
 struct bf_ibv_send_pkt{
     ibv_send_wr wr;
@@ -152,6 +154,7 @@ class VerbsSend {
     int         _timeout;
     uint32_t    _rate_limit;
     bf_ibv_send _verbs;
+    size_t      _udp_hdr_size;
     
     void get_interface_name(char* name) {
         sockaddr_in sin;
@@ -308,13 +311,13 @@ class VerbsSend {
             check_null(ibv_ctx,
                        "open device");
             
-            check_error(ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr),
-                        "query device");
+            check_error_nonzero(ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr),
+                                "query device");
             
             /* Loop through the ports on the device */
             for(p=1; p<=ibv_dev_attr.orig_attr.phys_port_cnt; p++) {
-                check_error(ibv_query_port(ibv_ctx, p, &ibv_port_attr),
-                            "query port");
+                check_error_nonzero(ibv_query_port(ibv_ctx, p, &ibv_port_attr),
+                                    "query port");
                 
                 /* Loop through GIDs of the port on the device */
                 for(g=0; g<ibv_port_attr.gid_tbl_len; g++) {
@@ -456,8 +459,8 @@ class VerbsSend {
             
             // Request notifications before any receive completion can be created.
             // Do NOT restrict to solicited-only completions for receive.
-            check_error(ibv_req_notify_cq(_verbs.cq[i], 0),
-                        "change receive completion queue request notifications");
+            check_error_nonzero(ibv_req_notify_cq(_verbs.cq[i], 0),
+                                "change receive completion queue request notifications");
         }
         
         // Setup the queue pairs
@@ -490,8 +493,8 @@ class VerbsSend {
             qp_attr.qp_state = IBV_QPS_INIT;
             qp_attr.port_num = _verbs.port_num;
             
-            check_error(ibv_modify_qp(_verbs.qp[i], &qp_attr, IBV_QP_STATE|IBV_QP_PORT),
-                        "modify send queue pair state");
+            check_error_nonzero(ibv_modify_qp(_verbs.qp[i], &qp_attr, IBV_QP_STATE|IBV_QP_PORT),
+                                "modify send queue pair state");
         }
     }
     void destroy_queues() {
@@ -667,6 +670,14 @@ class VerbsSend {
             throw VerbsSend::Error(ss.str());
         }
     }
+    inline void check_error_nonzero(int retval, std::string what) {
+        if( retval != 0 ) {
+            if( retval > 0 ) {
+                errno = retval;
+            }
+            check_error(-1, what);
+        }
+    }
     inline void check_null(void* ptr, std::string what) {
         if( ptr == NULL ) {
             destroy_queues();
@@ -708,12 +719,13 @@ public:
     };
     
     VerbsSend(int fd, size_t pkt_size_max)
-        : _fd(fd), _pkt_size_max(pkt_size_max), _timeout(1), _rate_limit(0) {
+        : _fd(fd), _pkt_size_max(pkt_size_max), _timeout(1), _rate_limit(0),
+          _udp_hdr_size(0) {
             _timeout = get_timeout_ms();
             
             ::memset(&_verbs, 0, sizeof(_verbs));
-            check_error(ibv_fork_init(),
-                        "make verbs fork safe");
+            check_error_nonzero(ibv_fork_init(),
+                                "make verbs fork safe");
             create_context();
             create_buffers();
             create_queues();
@@ -747,8 +759,8 @@ public:
       rl_attr.typical_pkt_sz = pkt_size;
       rl_attr.max_burst_sz = max_burst_size*pkt_size;
       for(i=0; i<BF_VERBS_SEND_NQP; i++) {
-          check_error(ibv_modify_qp_rate_limit(_verbs.qp[i], &rl_attr),
-                      "set queue pair rate limit");
+          check_error_nonzero(ibv_modify_qp_rate_limit(_verbs.qp[i], &rl_attr),
+                              "set queue pair rate limit");
       }
       #endif
       
@@ -798,6 +810,7 @@ public:
     inline int sendmmsg(mmsghdr *mmsg, int npackets, int flags=0) {
       int ret;
       bf_ibv_send_pkt* head;
+      bf_ibv_send_pkt* pkt;
       ibv_send_wr *s;
       
       if( npackets > BF_VERBS_SEND_NPKTBUF ) {
@@ -806,27 +819,38 @@ public:
       
       // Reclaim a set of buffers to use
       head = this->get_packet_buffers(npackets);
-      
-      // Load in the new data
+
+      // Load in the new data - walk the buffer chain instead of assuming sequential indices
+      // If ethernet/IP/UDP headers are pre-populated, skip the first memcpy
       int i;
       uint64_t offset;
-      for(i=0; i<npackets; i++) {
+      uint8_t* buf;
+      pkt = head;
+      for(i=0; i<npackets && pkt; i++) {
+          buf = (uint8_t*) pkt->sg.addr;
           offset = 0;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
-                   mmsg[i].msg_hdr.msg_iov[0].iov_base,
-                   mmsg[i].msg_hdr.msg_iov[0].iov_len);
-          offset += mmsg[i].msg_hdr.msg_iov[0].iov_len;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
+          if( flags & BF_VERBS_SENDMMSG_HEADERS_CHANGED ) {
+              // Only load the ethernet/IP/UDP header if requested.  This still
+              // requires the user to provide the header every call but it skips
+              // the extra memcpy calls.
+              ::memcpy(buf + offset,
+                       mmsg[i].msg_hdr.msg_iov[0].iov_base,
+                       mmsg[i].msg_hdr.msg_iov[0].iov_len);
+              _udp_hdr_size = mmsg[i].msg_hdr.msg_iov[0].iov_len;
+          }
+          offset += _udp_hdr_size;
+          ::memcpy(buf + offset,
                    mmsg[i].msg_hdr.msg_iov[1].iov_base,
                    mmsg[i].msg_hdr.msg_iov[1].iov_len);
           offset += mmsg[i].msg_hdr.msg_iov[1].iov_len;
-          ::memcpy(_verbs.mr_buf + i * _pkt_size_max + offset,
+          ::memcpy(buf + offset,
                    mmsg[i].msg_hdr.msg_iov[2].iov_base,
                    mmsg[i].msg_hdr.msg_iov[2].iov_len);
           offset += mmsg[i].msg_hdr.msg_iov[2].iov_len;
-          _verbs.pkt_buf[i].sg.length = offset;
+          pkt->sg.length = offset;
+          pkt = (bf_ibv_send_pkt*) pkt->wr.next;
       }
-      
+
       // Queue for sending
       ret = ibv_post_send(_verbs.qp[0], &(head->wr), &s);
       if( ret ) {

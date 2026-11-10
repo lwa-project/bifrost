@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2020-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <sstream>
@@ -51,11 +52,23 @@
 #endif
 
 #ifndef BF_VERBS_NPKTBUF
-#define BF_VERBS_NPKTBUF 8192
+#define BF_VERBS_NPKTBUF 32768
 #endif
 
 #ifndef BF_VERBS_WCBATCH
-#define BF_VERBS_WCBATCH 16
+#define BF_VERBS_WCBATCH 64
+#endif
+
+#ifndef BF_VERBS_CQ_MODERATION
+#define BF_VERBS_CQ_MODERATION 0
+#endif
+
+#ifndef BF_VERBS_CQ_MODERATION_COUNT
+#define BF_VERBS_CQ_MODERATION_COUNT 64
+#endif
+
+#ifndef BF_VERBS_CQ_MODERATION_PERIOD
+#define BF_VERBS_CQ_MODERATION_PERIOD 100
 #endif
 
 #define BF_VERBS_PAYLOAD_OFFSET 42
@@ -212,13 +225,13 @@ class Verbs {
             check_null(ibv_ctx,
                        "open device");
             
-            check_error(ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr),
-                        "query device");
+            check_error_nonzero(ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr),
+                                "query device");
             
             /* Loop through the ports on the device */
             for(p=1; p<=ibv_dev_attr.orig_attr.phys_port_cnt; p++) {
-                check_error(ibv_query_port(ibv_ctx, p, &ibv_port_attr),
-                            "query port");
+                check_error_nonzero(ibv_query_port(ibv_ctx, p, &ibv_port_attr),
+                                    "query port");
                 
                 /* Loop through GIDs of the port on the device */
                 for(g=0; g<ibv_port_attr.gid_tbl_len; g++) {
@@ -340,8 +353,8 @@ class Verbs {
             
             // Request notifications before any receive completion can be created.
             // Do NOT restrict to solicited-only completions for receive.
-            check_error(ibv_req_notify_cq(_verbs.cq[i], 0),
-                        "change receive completion queue request notifications");
+            check_error_nonzero(ibv_req_notify_cq(_verbs.cq[i], 0),
+                                "change receive completion queue request notifications");
         }
         
         // Setup the queue pairs
@@ -374,8 +387,8 @@ class Verbs {
             qp_attr.qp_state = IBV_QPS_INIT;
             qp_attr.port_num = _verbs.port_num;
             
-            check_error(ibv_modify_qp(_verbs.qp[i], &qp_attr, IBV_QP_STATE|IBV_QP_PORT),
-                        "modify receive queue pair state");
+            check_error_nonzero(ibv_modify_qp(_verbs.qp[i], &qp_attr, IBV_QP_STATE|IBV_QP_PORT),
+                                "modify receive queue pair state");
         }
     }
     void destroy_queues() {
@@ -409,6 +422,38 @@ class Verbs {
             }
         }
     }
+    void moderate_queues() {
+        #if defined BF_VERBS_CQ_MODERATION && BF_VERBS_CQ_MODERATION
+        int i;
+        int count = BF_VERBS_CQ_MODERATION_COUNT;
+        int period = BF_VERBS_CQ_MODERATION_PERIOD;
+        if( count <= 0 && period <= 0 ) {
+            return;
+        }
+        
+        // Clamp to what the device supports
+        ibv_device_attr_ex dev_attr;
+        ::memset(&dev_attr, 0, sizeof(ibv_device_attr_ex));
+        check_error_nonzero(ibv_query_device_ex(_verbs.ctx, NULL, &dev_attr),
+                            "query device");
+        count = std::max(0, std::min(count, (int) dev_attr.cq_mod_caps.max_cq_count));
+        period = std::max(0, std::min(period, (int) dev_attr.cq_mod_caps.max_cq_period));
+        if( count == 0 && period == 0 ) {
+            return;
+        }
+        
+        // Moderate the receive completion queues
+        ibv_modify_cq_attr cq_attr;
+        ::memset(&cq_attr, 0, sizeof(ibv_modify_cq_attr));
+        cq_attr.attr_mask = IBV_CQ_ATTR_MODERATE;
+        cq_attr.moderate.cq_count = count;
+        cq_attr.moderate.cq_period = period;
+        for(i=0; i<BF_VERBS_NQP; i++) {
+            check_error_nonzero(ibv_modify_cq(_verbs.cq[i], &cq_attr),
+                                "set receive completion queue moderation");
+        }
+        #endif
+    }
     void link_work_requests() {
         // Make sure we are ready to go
         check_null(_verbs.pkt_buf,
@@ -441,8 +486,8 @@ class Verbs {
             _verbs.pkt_buf[k+BF_VERBS_NPKTBUF-1].wr.next = NULL;
             
             // Post work requests to the receive queue
-            check_error(ibv_post_recv(_verbs.qp[i], &_verbs.pkt_buf[k].wr, &recv_wr_bad),
-                        "post work request to receive queue");
+            check_error_nonzero(ibv_post_recv(_verbs.qp[i], &_verbs.pkt_buf[k].wr, &recv_wr_bad),
+                                "post work request to receive queue");
         }
     }
     void create_flows() {
@@ -639,6 +684,14 @@ class Verbs {
             throw Verbs::Error(ss.str());
         }
     }
+    inline void check_error_nonzero(int retval, std::string what) {
+        if( retval != 0 ) {
+            if( retval > 0 ) {
+                errno = retval;
+            }
+            check_error(-1, what);
+        }
+    }
     inline void check_null(void* ptr, std::string what) {
         if( ptr == NULL ) {
             destroy_flows();
@@ -686,11 +739,12 @@ public:
             _timeout = get_timeout_ms();
             
             ::memset(&_verbs, 0, sizeof(_verbs));
-            check_error(ibv_fork_init(),
-                        "make verbs fork safe");
+            check_error_nonzero(ibv_fork_init(),
+                                "make verbs fork safe");
             create_context();
             create_buffers();
             create_queues();
+            moderate_queues();
             link_work_requests();
             create_flows();
     }

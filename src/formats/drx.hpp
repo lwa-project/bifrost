@@ -134,7 +134,6 @@ public:
 			    *(aligned_data + src) = 0;
 			    aligned_data += nsrc;
 		    }
-		    aligned_data += t*4096*nsrc;
 	    }
     }
 };

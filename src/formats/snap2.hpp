@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -117,6 +117,8 @@ public:
 };
 
 class SNAP2Processor : virtual public PacketProcessor {
+    int _npol     = 0;
+    int _npol_tot = 0;
 public:
     inline void operator()(const PacketDesc* pkt,
                            uint64_t          seq0,
@@ -132,6 +134,8 @@ public:
             ngood_bytes[obuf_idx]               += nbyte;
             src_ngood_bytes[obuf_idx][pkt->src] += nbyte;
             int payload_size = pkt->payload_size;
+            _npol     = pkt->npol;
+            _npol_tot = pkt->npol_tot;
         
             size_t obuf_offset = (pkt->seq-obuf_seq0)*pkt->nsrc*payload_size;
             typedef unaligned256_type itype; //256 bits = 32 pols / word
@@ -156,8 +160,7 @@ public:
             int c=0;
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
             __m256i *dest_p;
-            __m256i vecbuf[2];
-            uint64_t *in64 = (uint64_t *)in;
+            __m256i *src_p = (__m256i *)in;
             dest_p = (__m256i *)(out + (words_per_chan_out * (pkt_chan)) + pol_offset_out);
 #endif
             //if((pol_offset_out == 0) && (pkt_chan==0) && ((pkt->seq % 120)==0) ){
@@ -165,15 +168,13 @@ public:
             //}
             for(c=0; c<pkt->nchan; c++) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
-               vecbuf[0] = _mm256_set_epi64x(in64[3], in64[2], in64[1], in64[0]);
-               vecbuf[1] = _mm256_set_epi64x(in64[7], in64[6], in64[5], in64[4]);
-               _mm256_stream_si256(dest_p, vecbuf[0]);
-               _mm256_stream_si256(dest_p+1,   vecbuf[1]);
-               in64 += 8;
+               _mm256_stream_si256(dest_p,   _mm256_loadu_si256(src_p));
+               _mm256_stream_si256(dest_p+1, _mm256_loadu_si256(src_p+1));
+               src_p += 2;
                dest_p += words_per_chan_out;
 #else
-               ::memcpy(&out[pkt->src + pkt->nsrc*c],
-                        &in[c], sizeof(otype));
+               ::memcpy(out + (words_per_chan_out * (pkt_chan + c)) + pol_offset_out,
+                        (uint8_t*)in + c * pkt->npol, pkt->npol);
 #endif
             }
     }
@@ -184,12 +185,32 @@ public:
                                  int      nchan,
                                  int      nseq) {
             typedef aligned256_type otype;
-            otype* __restrict__ aligned_data = (otype*)data;
+            if( _npol <= 0 || _npol_tot < _npol ) {
+                return;
+            }
+            const int npol_blocks   = _npol_tot / _npol;
+            const int nchan_blocks  = nsrc / npol_blocks;
+            const int chan_block    = src / npol_blocks;
+            const int pol_block     = src % npol_blocks;
+            const int words_per_src = _npol / (int)sizeof(otype);  // 2 for 64 inputs
+            const size_t words_per_chan = _npol_tot / sizeof(otype);
+            const size_t nchan_tot  = (size_t)nchan * nchan_blocks;
+            otype* __restrict__ base = (otype*)data + pol_block*words_per_src;
+#if defined BF_AVX_ENABLED && BF_AVX_ENABLED
+            __m256i zero = _mm256_setzero_si256();
+#endif
             for( int t=0; t<nseq; ++t ) {
-                   for( int c=0; c<nchan; ++c ) {
-                           ::memset(&aligned_data[src + nsrc*(c + nchan*t)],
-                                    0, sizeof(otype));
-                   }
+                otype* ptr = base + (t*nchan_tot + (size_t)chan_block*nchan)*words_per_chan;
+                for( int c=0; c<nchan; ++c ) {
+#if defined BF_AVX_ENABLED && BF_AVX_ENABLED
+                    for( int w=0; w<words_per_src; ++w ) {
+                        _mm256_stream_si256(reinterpret_cast<__m256i*>(ptr+w), zero);
+                    }
+#else
+                    ::memset(ptr, 0, words_per_src*sizeof(otype));
+#endif
+                    ptr += words_per_chan;
+                }
             }
     }
 };

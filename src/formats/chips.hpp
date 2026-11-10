@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, The Bifrost Authors. All rights reserved.
+ * Copyright (c) 2019-2026, The Bifrost Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -106,23 +106,23 @@ public:
 	
 	    int chan = 0;
 			//cout << pkt->src << ", " << pkt->nsrc << endl;
-		  //cout << pkt->nchan << endl;
+			//cout << pkt->nchan << endl;
 			for( ; chan<pkt->nchan; ++chan ) {
 #if defined BF_AVX_ENABLED && BF_AVX_ENABLED
            const unaligned256_type* dsrc = (const unaligned256_type*) &in[chan];
            aligned256_type* ddst = (aligned256_type*) &out[pkt->src + pkt->nsrc*chan];
            
            __m256i mtemp = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(dsrc));
-           _mm256_stream_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
+           _mm256_store_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
 #else
 #if defined BF_SSE_ENABLED && BF_SSE_ENABLED
            const unaligned128_type* dsrc = (const unaligned128_type*) &in[chan];
            aligned128_type* ddst = (aligned128_type*) &out[pkt->src + pkt->nsrc*chan];
            
 					 __m128i mtemp = _mm_loadu_si128(reinterpret_cast<const __m128i*>(dsrc));
-           _mm_stream_si128(reinterpret_cast<__m128i*>(ddst), mtemp);
+           _mm_store_si128(reinterpret_cast<__m128i*>(ddst), mtemp);
 					 mtemp = _mm_loadu_si128(reinterpret_cast<const __m128i*>(dsrc+1));
-           _mm_stream_si128(reinterpret_cast<__m128i*>(ddst+1), mtemp);
+           _mm_store_si128(reinterpret_cast<__m128i*>(ddst+1), mtemp);
 #else
 						::memcpy(&out[pkt->src + pkt->nsrc*chan],
 						      	 &in[chan], sizeof(otype));
@@ -144,14 +144,14 @@ public:
 			    aligned256_type* ddst = (aligned256_type*) &aligned_data[src + nsrc*(c + nchan*t)];
 					
 					__m256i mtemp = _mm256_setzero_si256();
-			    _mm256_stream_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
+			    _mm256_store_si256(reinterpret_cast<__m256i*>(ddst), mtemp);
 #else
 #if defined BF_SSE_ENABLED && BF_SSE_ENABLED
 			    aligned128_type* ddst = (aligned128_type*) &aligned_data[src + nsrc*(c + nchan*t)];
 					
 					__m128i mtemp = _mm_setzero_si128();
-					_mm_stream_si128(reinterpret_cast<__m128i*>(ddst), mtemp);
-					_mm_stream_si128(reinterpret_cast<__m128i*>(ddst+1), mtemp);
+					_mm_store_si128(reinterpret_cast<__m128i*>(ddst), mtemp);
+					_mm_store_si128(reinterpret_cast<__m128i*>(ddst+1), mtemp);
 #else
 			    ::memset(&aligned_data[src + nsrc*(c + nchan*t)],
 			             0, sizeof(otype));

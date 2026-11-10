@@ -141,12 +141,21 @@ AS_IF([test x$enable_verbs != xno],
 
  AC_ARG_WITH([rx-buffer-size],
             [AS_HELP_STRING([--with-rx-buffer-size=N],
-                            [default Infiniband verbs receive buffer size in packets (default=8192)])],
+                            [default Infiniband verbs receive buffer size in packets (default=32768)])],
             [],
-            [with_rx_buffer_size=8192])
+            [with_rx_buffer_size=32768])
  AC_SUBST([VERBS_NPKTBUF], [$with_rx_buffer_size])
  AS_IF([test x$HAVE_VERBS = x0],
        [AC_SUBST([VERBS_NPKTBUF], [0])])
+
+ AC_ARG_WITH([verbs-wcbatch],
+            [AS_HELP_STRING([--with-verbs-wcbatch=N],
+                            [default Infiniband verbs completion queue batch size (default=64)])],
+            [],
+            [with_verbs_wcbatch=64])
+ AC_SUBST([VERBS_WCBATCH], [$with_verbs_wcbatch])
+ AS_IF([test x$HAVE_VERBS = x0],
+       [AC_SUBST([VERBS_WCBATCH], [0])])
 
  AC_ARG_WITH([tx-buffer-size],
             [AS_HELP_STRING([--with-tx-buffer-size=N],
@@ -180,6 +189,46 @@ AS_IF([test x$enable_verbs != xno],
           [AC_SUBST([VERBS_SEND_PACING], [0])
            AC_MSG_RESULT([no])])
        ])
+
+ AC_ARG_WITH([rx-cq-moderation-count],
+            [AS_HELP_STRING([--with-rx-cq-moderation-count=N],
+                            [default Infiniband verbs receive completion queue moderation count, 0 to disable (default=64)])],
+            [],
+            [with_rx_cq_moderation_count=64])
+ AC_SUBST([VERBS_CQ_MODERATION_COUNT], [$with_rx_cq_moderation_count])
+
+ AC_ARG_WITH([rx-cq-moderation-period],
+            [AS_HELP_STRING([--with-rx-cq-moderation-period=N],
+                            [default Infiniband verbs receive completion queue moderation period in us, 0 to disable (default=100)])],
+            [],
+            [with_rx_cq_moderation_period=100])
+ AC_SUBST([VERBS_CQ_MODERATION_PERIOD], [$with_rx_cq_moderation_period])
+
+AC_SUBST([VERBS_CQ_MODERATION], [0])
+AS_IF([test x$HAVE_VERBS != x0],
+      [AC_MSG_CHECKING([for Infiniband verbs completion queue moderation support])
+       AC_COMPILE_IFELSE([
+         AC_LANG_PROGRAM([[
+           #include <infiniband/verbs.h>]],
+         [[
+           ibv_context* ibv_ctx = NULL;
+           ibv_device_attr_ex ibv_dev_attr;
+           ibv_cq* ibv_cq = NULL;
+           ibv_modify_cq_attr ibv_cq_attr;
+           
+           ibv_query_device_ex(ibv_ctx, NULL, &ibv_dev_attr);
+           ibv_cq_attr.attr_mask = IBV_CQ_ATTR_MODERATE;
+           ibv_cq_attr.moderate.cq_count = ibv_dev_attr.cq_mod_caps.max_cq_count;
+           ibv_cq_attr.moderate.cq_period = ibv_dev_attr.cq_mod_caps.max_cq_period;
+           ibv_modify_cq(ibv_cq, &ibv_cq_attr);
+         ]])],
+         [AC_SUBST([VERBS_CQ_MODERATION], [1])
+          AC_MSG_RESULT([yes])],
+         [AC_MSG_RESULT([no])])
+      ])
+AS_IF([test x$VERBS_CQ_MODERATION = x0],
+      [AC_SUBST([VERBS_CQ_MODERATION_COUNT], [0])
+       AC_SUBST([VERBS_CQ_MODERATION_PERIOD], [0])])
 
 #
 # RDMA
