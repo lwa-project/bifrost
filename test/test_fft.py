@@ -41,6 +41,8 @@ from bifrost.libbifrost_generated import BF_CUDA_ENABLED, BF_CUDA_VERSION
 
 MTOL = 1e-6 # Relative tolerance at the mean magnitude
 RTOL = 1e-1
+# Note: numpy >= 2 computes FFTs in the precision of the input so the gold
+#         values are always computed from double precision inputs.
 
 def compare(result, gold):
     #np.testing.assert_allclose(result, gold, RTOL, ATOL)
@@ -79,9 +81,9 @@ class TestFFT(unittest.TestCase):
             # Note: Numpy applies normalization while CUFFT does not
             norm = reduce(lambda a, b: a * b, [known_data.shape[d]
                                                for d in axes])
-            known_result = gold_ifftn(known_data, axes=axes) * norm
+            known_result = gold_ifftn(known_data.astype(np.complex128), axes=axes) * norm
         else:
-            known_result = gold_fftn(known_data, axes=axes)
+            known_result = gold_fftn(known_data.astype(np.complex128), axes=axes)
             if fftshift:
                 known_result = np.fft.fftshift(known_result, axes=axes)
         x = (np.abs(odata.copy('system') - known_result) / known_result > RTOL).astype(np.int32)
@@ -105,7 +107,7 @@ class TestFFT(unittest.TestCase):
         fft = Fft()
         fft.init(idata, odata, axes=axes)
         fft.execute(idata, odata)
-        known_result = gold_rfftn(known_data.astype(np.float32) / scale, axes=axes)
+        known_result = gold_rfftn(known_data.astype(np.float64) / scale, axes=axes)
         compare(odata.copy('system'), known_result)
     def run_test_r2c(self, shape, axes, dtype=np.float32):
         self.run_test_r2c_dtype(shape, axes, np.float32)
@@ -125,7 +127,7 @@ class TestFFT(unittest.TestCase):
         # Note: We need to make a set of known_data that are consistent with a
         # a real real-to-complex FFT.
         known_data_real = np.random.normal(size=oshape).astype(np.float32)
-        known_data = gold_rfftn(known_data_real, axes=axes)
+        known_data = gold_rfftn(known_data_real.astype(np.float64), axes=axes)
         known_data = known_data.copy().astype(np.complex64)
         idata = bf.ndarray(known_data, space='cuda')
         odata = bf.ndarray(shape=oshape, dtype='f32', space='cuda')
@@ -134,7 +136,7 @@ class TestFFT(unittest.TestCase):
         fft.execute(idata, odata)
         # Note: Numpy applies normalization while CUFFT does not
         norm = reduce(lambda a, b: a * b, [shape[d] for d in axes])
-        known_result = gold_irfftn(known_data, axes=axes) * norm
+        known_result = gold_irfftn(known_data.astype(np.complex128), axes=axes) * norm
         compare(odata.copy('system'), known_result)
     def run_test_c2c(self, shape, axes):
         self.run_test_c2c_impl(shape, axes)
